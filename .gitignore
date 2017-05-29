@@ -1,0 +1,9 @@
+[editor files]
+.idea/*
+
+[cruft]
+*.pyc
+
+[virtualenv]
+venv/*
+
