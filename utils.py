@@ -11,7 +11,7 @@ def get_youtube_links(channel_history):
 def strip_video_id(video_url):
     video_id = None
     video_url.split('?')
-    for param in video_url.split('?'):
+    for param in video_url.split('&'):
         if 'v=' in param:
             video_id = param.split('=')[1]
             break
