@@ -21,17 +21,17 @@ application.secret_key = str(uuid.uuid4())
 logger = logging.getLogger(__name__)
 config = get_config()
 
-CHANNEL_ID = config.get('CHANNEL_ID', None)
-PLAYLIST_ID = config.get('PLAYLIST_ID', None)
+CHANNEL_ID = config['CHANNEL_ID']
+PLAYLIST_ID = config['PLAYLIST_ID']
 
-SLACK_CLIENT_ID = config.get('SLACK_CLIENT_ID', None)
-SLACK_CLIENT_SECRET = config.get('SLACK_CLIENT_SECRET', None)
-SLACK_OAUTH_TOKEN = config.get('SLACK_OAUTH_TOKEN', None)
-SLACK_VERIFICATION_TOKEN = config.get('SLACK_VERIFICATION_TOKEN', None)
+SLACK_CLIENT_ID = config['SLACK_CLIENT_ID']
+SLACK_CLIENT_SECRET = config['SLACK_CLIENT_SECRET']
+SLACK_OAUTH_TOKEN = config['SLACK_OAUTH_TOKEN']
+SLACK_VERIFICATION_TOKEN = config['SLACK_VERIFICATION_TOKEN']
 
-YOUTUBE_CLIENT_ID = config.get('YOUTUBE_CLIENT_ID', None)
-YOUTUBE_CLIENT_SECRET = config.get('YOUTUBE_CLIENT_SECRET', None)
-BASE_URI = config.get('BASE_URI', None)
+YOUTUBE_CLIENT_ID = config['YOUTUBE_CLIENT_ID']
+YOUTUBE_CLIENT_SECRET = config['YOUTUBE_CLIENT_SECRET']
+BASE_URI = config['BASE_URI']
 REDIRECT_URI = '%s/oauth2callback' % BASE_URI
 
 SCOPE = 'https://www.googleapis.com/auth/youtube'
@@ -72,6 +72,7 @@ def oauth():
         'client_secret': SLACK_CLIENT_SECRET,
         'code': code
     }
+
     r = requests.get(url='https://slack.com/api/oauth.access', params=payload)
     if r.status_code == 200:
         return redirect(url_for('index'))

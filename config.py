@@ -12,9 +12,11 @@ class DevConfig(object):
     def get_config(self):
         cfg = self._get_config()
 
-        for k, v in cfg:
+        for k, v in cfg.items():
             if not v:
                 raise Exception("Missing value in config %s" % k)
+
+        return cfg
 
 
 class ProdConfig(DevConfig):
@@ -32,7 +34,7 @@ class ProdConfig(DevConfig):
 
 
 def get_config():
-    if os.environ['ENV'] == PROD:
+    if getattr(os.environ, 'ENV', None) == PROD:
         return ProdConfig().get_config()
 
     return DevConfig().get_config()
