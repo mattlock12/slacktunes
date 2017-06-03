@@ -1,11 +1,14 @@
-[editor files]
+# editor files
 .idea/*
 
-[cruft]
+# cruft
 *.pyc
 
-[virtualenv]
+# virtualenv
 venv/*
+
+# local dev
+credentials*.json
 
 
 # Elastic Beanstalk Files
