@@ -2,11 +2,13 @@ import httplib2
 import json
 import logging
 import os
+import time
 import uuid
 
 import requests
 
 from apiclient.discovery import build
+from config import get_config
 from flask import render_template, jsonify, redirect, request, url_for, Flask
 from oauth2client import client
 
@@ -17,28 +19,39 @@ application = Flask(__name__)
 application.secret_key = str(uuid.uuid4())
 
 logger = logging.getLogger(__name__)
+config = get_config()
 
-PLAYLIST_ID = os.environ['PLAYLIST_ID']
-YOUTUBE_CLIENT_ID = os.environ['YOUTUBE_CLIENT_ID']
-YOUTUBE_CLIENT_SECRET = os.environ['YOUTUBE_CLIENT_SECRET']
-# TODO: for local dev, different redirect uri. Maybe do this when you create the shit?
-REDIRECT_URI = 'https://slacktunes.me/oauth2callback'
-SCOPE = 'https://www.googleapis.com/auth/youtube https://www.googleapis.com/auth/youtubepartner'
+CHANNEL_ID = config.get('CHANNEL_ID', None)
+PLAYLIST_ID = config.get('PLAYLIST_ID', None)
+
+SLACK_CLIENT_ID = config.get('SLACK_CLIENT_ID', None)
+SLACK_CLIENT_SECRET = config.get('SLACK_CLIENT_SECRET', None)
+SLACK_OAUTH_TOKEN = config.get('SLACK_OAUTH_TOKEN', None)
+SLACK_VERIFICATION_TOKEN = config.get('SLACK_VERIFICATION_TOKEN', None)
+
+YOUTUBE_CLIENT_ID = config.get('YOUTUBE_CLIENT_ID', None)
+YOUTUBE_CLIENT_SECRET = config.get('YOUTUBE_CLIENT_SECRET', None)
+BASE_URI = config.get('BASE_URI', None)
+REDIRECT_URI = '%s/oauth2callback' % BASE_URI
+
+SCOPE = 'https://www.googleapis.com/auth/youtube'
 API_SERVICE_NAME = "youtube"
 API_VERSION = "v3"
+ALERT_UNAUTHED_INTERVAL = 3600  # 1x per hour
 
 APP_CACHE = {}
 youtube_service = False
 
 
-def get_youtube_credentials():
-    return APP_CACHE.get('youtube_credentials', None)
-
-
 def get_youtube_service():
-    credentials = get_youtube_credentials()
+    credentials = APP_CACHE.get('youtube_credentials', None)
     if not credentials:
         logger.error("No cached credentials found")
+        post_update_to_chat(url=slack_chat_post_url,
+                            payload={
+                                'channel': CHANNEL_ID,
+                                'text': 'No credentials. Re-auth at %s' % REDIRECT_URI
+                         })
         return False
 
     http_auth = credentials.authorize(httplib2.Http())
@@ -54,7 +67,11 @@ def index():
 @application.route('/oauth/')
 def oauth():
     code = request.args.get('code', None)
-    payload = {'client_id': os.environ['SLACK_CLIENT_ID'], 'client_secret': os.environ['SLACK_CLIENT_SECRET'], 'code': code}
+    payload = {
+        'client_id': SLACK_CLIENT_ID,
+        'client_secret': SLACK_CLIENT_SECRET,
+        'code': code
+    }
     r = requests.get(url='https://slack.com/api/oauth.access', params=payload)
     if r.status_code == 200:
         return redirect(url_for('index'))
@@ -77,7 +94,7 @@ def oauth2callback():
     auth_code = request.args.get('code')
     credentials = flow.step2_exchange(auth_code)
     APP_CACHE['youtube_credentials'] = credentials
-    APP_CACHE['has_posted_auth_error'] = False
+    APP_CACHE['has_posted_auth_error'] = 0
     logger.info("Successfully got credentials from youtube")
 
     global youtube_service
@@ -122,7 +139,7 @@ def init_playlist():
 
 
 def post_update_to_chat(url, payload):
-    payload.update({"token": os.environ['SLACK_OAUTH_TOKEN']})
+    payload.update({"token": SLACK_OAUTH_TOKEN})
     res = requests.post(url=url, data=payload)
 
     return res.text, res.status_code
@@ -165,9 +182,11 @@ def add_video_to_playlist(video_id, playlist_id=PLAYLIST_ID, position=''):
             body=resource_body,
             part='snippet'
         ).execute()
+        return (True, results)
     except Exception as e:
-        results = False
-    return results
+        logger.exception(e)
+        return (False, e)
+
 
 
 # handles incoming event hooks
@@ -183,7 +202,7 @@ def slack_events():
         return "No event", 400
 
     # verify token from slack in Basic Information
-    if request_data_dict.get('token') != os.environ['SLACK_VERIFICATION_TOKEN']:
+    if not request_data_dict.get('token') or request_data_dict.get('token') != SLACK_VERIFICATION_TOKEN:
         logger.error("Incorrect slack verification token")
         return "Incorrect token", 400
 
@@ -194,7 +213,7 @@ def slack_events():
     channel = event.get('channel')
     logger.info("%s action received in channel %s" % (event.get('type'), channel))
 
-    if channel != WERKTUNES_CHANNEL_ID:
+    if channel != CHANNEL_ID:
         return "Non werktune channel link share", 200
 
     links = event.get('links', None)
@@ -211,26 +230,29 @@ def slack_events():
 
     global youtube_service
     if not youtube_service:
-        logger.error("You authed service. Please authenticate")
-        if not APP_CACHE.get('has_posted_auth_error', False):
-            APP_CACHE['has_posted_auth_error'] = True
+        logger.error("No authed service. Please authenticate")
+        last_time_alerted = APP_CACHE.get('has_posted_auth_error', 0)
+        now = int(time.time())
+        if not last_time_alerted or now >= (last_time_alerted + ALERT_UNAUTHED_INTERVAL):
+            APP_CACHE['has_posted_auth_error'] = now
             return post_update_to_chat(url=slack_chat_post_url,
                                        payload={
-                                           'channel': WERKTUNES_CHANNEL_ID,
+                                           'channel': CHANNEL_ID,
                                            'text': 'No auth creds! Get @matt to go to %s and reauth' % REDIRECT_URI}
                                        )
         return "Couldn't get authenticated youtube service", 200
 
-    result = add_video_to_playlist(video_id=video_id)
-    if result:
-        return post_update_to_chat(url=slack_chat_post_url,
-                                   payload={
-                                       "channel": channel,
-                                       "text": "Added video to werktunes"
-                                   })
-    else:
-        return "Ok", 200
+    success, result = add_video_to_playlist(video_id=video_id)
+    msg = "Added video to werktunes"
+    if not success:
+        msg = result
 
+    return post_update_to_chat(url=slack_chat_post_url,
+                               payload={
+                                   "channel": channel,
+                                   "text": msg
+                               })
 
 if __name__ == '__main__':
     application.run(host='0.0.0.0', port=8000)
+
