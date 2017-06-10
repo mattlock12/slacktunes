@@ -30,7 +30,7 @@ class ProdConfig(DevConfig):
             'YOUTUBE_CLIENT_ID': os.environ['YOUTUBE_CLIENT_ID'],
             'YOUTUBE_CLIENT_SECRET': os.environ['YOUTUBE_CLIENT_SECRET'],
             'BASE_URI': 'https://slacktunes.me',
-            'CHANNEL_ID': '',  # TODO: change me
+            'CHANNEL_ID': os.environ['CHANNEL_ID'],
         }
 
 
