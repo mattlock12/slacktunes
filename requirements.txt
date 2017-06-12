@@ -14,6 +14,7 @@ oauth2client==4.1.0
 packaging==16.8
 pyasn1==0.2.3
 pyasn1-modules==0.0.8
+PyMySQL==0.7.11
 pyparsing==2.2.0
 requests==2.17.3
 rsa==3.4.2

@@ -11,7 +11,7 @@ try:
     YOUTUBE_CLIENT_ID = os.environ['YOUTUBE_CLIENT_ID']
     YOUTUBE_CLIENT_SECRET = os.environ['YOUTUBE_CLIENT_SECRET']
 
-    MYSQL_DB_FORMAT = 'mysql://{username}:{password}@{server}:{port}/{db}'
+    MYSQL_DB_FORMAT = 'mysql+pymysql://{username}:{password}@{server}:{port}/{db}'
     MYSQL_USERNAME = os.environ['RDS_USER']
     MYSQL_PASSWORD = os.environ['RDS_PASSWORD']
     MYSQL_SERVER = os.environ['RDS_ENDPOINT']
