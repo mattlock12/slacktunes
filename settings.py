@@ -23,4 +23,11 @@ DB_URI = MYSQL_DB_FORMAT.format(
     db=MYSQL_DBNAME
 )
 
+try:
+    from local_settings import *
+except ImportError:
+    pass
+
+
+
 YOUTUBE_REDIRECT_URI = '%s/youtubeoauth2callback' % BASE_URI

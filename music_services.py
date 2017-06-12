@@ -102,8 +102,15 @@ class Youtube(ServiceBase):
 
         channel_id = channels_response['items'][0]['id']
 
-        existing_playlists = service.playlists().list(part='snippet', mine=True).execute()
-        for pl in existing_playlists['items']:
+        existing_playlists = []
+        playlists_request = service.playlists().list(part='snippet', mine=True, maxResults=50)
+        while playlists_request:
+            playlists_response = playlists_request.execute()
+            existing_playlists.extend(playlists_response['items'])
+
+            playlists_request = service.playlists().list_next(playlists_request, playlists_response)
+
+        for pl in existing_playlists:
             if pl['snippet']['title'] == playlist_name:
                 return True, pl
 
