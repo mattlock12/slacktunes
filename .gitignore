@@ -8,8 +8,8 @@
 venv/*
 
 # local dev
-credentials*.json
-
+local_settings.py
+credentials*json
 
 # Elastic Beanstalk Files
 .elasticbeanstalk/*
