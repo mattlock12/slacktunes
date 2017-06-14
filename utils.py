@@ -2,7 +2,12 @@ def strip_youtube_video_id(video_url):
     video_id = None
     if "v=" not in video_url:
         # mobile video share
-        return video_url.split('be/')[1]
+        video_url_parts = video_url.split()
+        link = [p for p in video_url_parts if 'yout' in p]
+        if not link:
+            return None
+
+        return link[0].split('be/')[1]
 
     video_url.split('?')
     for param in video_url.split('&'):
@@ -10,6 +15,10 @@ def strip_youtube_video_id(video_url):
             video_id = param.split('=')[1]
             break
     return video_id
+
+
+def strip_spotify_track_id(url):
+    return url.split('/')[-1]
 
 
 def get_links(channel_history):

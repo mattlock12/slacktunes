@@ -8,6 +8,9 @@ SLACK_VERIFICATION_TOKEN = ''
 YOUTUBE_CLIENT_ID = ''
 YOUTUBE_CLIENT_SECRET = ''
 
+SPOTIFY_CLIENT_ID = ''
+SPOTIFY_CLIENT_SECRET = ''
+
 MYSQL_DB_FORMAT = 'mysql+pymysql://{username}:{password}@{server}:{port}/{db}'
 MYSQL_USERNAME = ''
 MYSQL_PASSWORD = ''
@@ -28,6 +31,5 @@ try:
 except ImportError:
     pass
 
-
-
 YOUTUBE_REDIRECT_URI = '%s/youtubeoauth2callback' % BASE_URI
+SPOTIFY_REDIRECT_URI = "%s/spotifyoauth2callback" % BASE_URI
