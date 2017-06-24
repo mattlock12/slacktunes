@@ -306,16 +306,19 @@ def slack_events():
     channel = event.get('channel')
     logger.info("%s action received in channel %s" % (event.get('type'), channel))
 
-    playlists_in_channel = Playlist.query.filter_by(channel_id=channel).all()
-    if not playlists_in_channel:
-        return
-
     links = event.get('links', None)
     if not links:
         logger.error("No links in event")
         return "No link", 400
 
     link = links[0]['url']
+    link_service = MusicService.from_link(link=link)
+
+    # TODO: change this for cross-service adding
+    playlists_in_channel = Playlist.query.filter_by(channel_id=channel, service=link_service).all()
+
+    if not playlists_in_channel:
+        return
     successful_playlists = []
     failed_playlists = []
     title = None
@@ -326,6 +329,7 @@ def slack_events():
         success, title = music_service.add_link_to_playlist(pl, link)
 
         if success:
+            title = title
             successful_playlists.append(pl.name)
         else:
             failed_playlists.append(pl.name)

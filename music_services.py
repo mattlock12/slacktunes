@@ -198,9 +198,6 @@ class Youtube(ServiceBase):
 
     @credentials_required
     def add_link_to_playlist(self, playlist, link):
-        if not self.credentials:
-            raise NoCredentialsError
-
         if not self.is_same_service_link(link):
             return False, "Cross service links not currently supported"
 
