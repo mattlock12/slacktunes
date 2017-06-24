@@ -1,4 +1,5 @@
 import datetime
+import json
 from oauth2client.client import OAuth2Credentials
 
 from sqlalchemy import UniqueConstraint, exc
@@ -79,5 +80,8 @@ class Credential(db.Model, BaseModelMixin):
         self.credentials = credentials
 
     def to_oauth2_creds(self):
-        return OAuth2Credentials.from_json(self.credentials)
+        if self.service is MusicService.YOUTUBE:
+            return OAuth2Credentials.from_json(self.credentials)
+        elif self.service is MusicService.SPOTIFY:
+            return json.loads(self.credentials)
 

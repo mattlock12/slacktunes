@@ -1,7 +1,5 @@
 from enum import Enum
 
-from music_services import GMusic, Spotify, Youtube
-
 
 class InvalidEnumException(Exception):
     pass
@@ -15,9 +13,9 @@ class SlackUrl(Enum):
 
 
 class MusicService(Enum):
-    YOUTUBE = Youtube
-    SPOTIFY = Spotify
-    GMUSIC = GMusic
+    YOUTUBE = 'Youtube'
+    SPOTIFY = 'Spotify'
+    GMUSIC = 'Gmusic'
 
     @classmethod
     def from_string(cls, string):
@@ -29,3 +27,14 @@ class MusicService(Enum):
             return cls.GMUSIC
         else:
             raise InvalidEnumException
+
+    @classmethod
+    def from_link(cls, link):
+        if 'yout' in link:
+            return cls.YOUTUBE
+        elif 'spotify' in link:
+            return cls.SPOTIFY
+        elif 'play.google.com/music' in link:
+            return cls.GMUSIC
+        else:
+            return None
