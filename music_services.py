@@ -87,6 +87,24 @@ class ServiceBase(object):
     def exchange(cls, code, state):
         raise NotImplementedError
 
+    @credentials_required
+    def add_link_to_playlist(self, playlist, link):
+        if not self.is_same_service_link(link):
+            return False, "Cross service links not currently supported"
+
+        existing_track_ids = self.tracks_in_playlist.get(playlist.service_id, set())
+        if not existing_track_ids:
+            existing_track_ids = self.tracks_in_playlist[playlist.service_id] = self.list_tracks_in_playlist(playlist)
+
+        track_id = self.get_track_id(link)
+        if not track_id:
+            return False, "Could not parse video id"
+
+        if track_id in existing_track_ids:
+            return False, "Already in playlist"
+
+        return self.add_track_to_playlist_by_track_id(playlist=playlist, track_id=track_id)
+
 
 class Youtube(ServiceBase):
     SCOPE = 'https://www.googleapis.com/auth/youtube'
@@ -197,21 +215,7 @@ class Youtube(ServiceBase):
         return video_ids
 
     @credentials_required
-    def add_link_to_playlist(self, playlist, link):
-        if not self.is_same_service_link(link):
-            return False, "Cross service links not currently supported"
-
-        existing_video_ids = self.tracks_in_playlist.get(playlist.service_id, set())
-        if not existing_video_ids:
-            existing_video_ids = self.tracks_in_playlist[playlist.service_id] = self.list_tracks_in_playlist(playlist)
-
-        video_id = self.get_track_id(link)
-        if not video_id:
-            return False, "Could not parse video id"
-
-        if video_id in existing_video_ids:
-            return False, "Already in playlist"
-
+    def add_track_to_playlist_by_track_id(self, playlist, track_id):
         service = self.get_wrapped_service()
         resource_body = {
             'kind': 'youtube#playlistItem',
@@ -219,13 +223,14 @@ class Youtube(ServiceBase):
                 'playlistId': playlist.service_id,
                 'resourceId': {
                     'kind': 'youtube#video',
-                    'videoId': video_id,
+                    'videoId': track_id,
                 }
             }
         }
+
+        # let exceptions bubble up
         resp = service.playlistItems().insert(part='snippet', body=resource_body).execute()
-        existing_video_ids.add(video_id)
-        self.tracks_in_playlist[playlist.service_id] = existing_video_ids
+        self.tracks_in_playlist[playlist.service_id].add(track_id)
 
         return True, resp['snippet']['title']
 
@@ -350,45 +355,29 @@ class Spotify(ServiceBase):
 
         tracks_request = service.user_playlist_tracks(user=self.get_user_info_from_spotify()['id'],
                                                       playlist_id=playlist.service_id)
-        tracks = []
+        tracks = set()
         while tracks_request:
-            tracks.extend(tracks_request['items'])
+            tracks = tracks|set(tracks_request['items'])
             tracks_request = service.next(tracks_request)
 
         return tracks
 
     @credentials_required
-    def add_link_to_playlist(self, playlist, link):
+    def add_track_to_playlist_by_track_id(self, playlist, track_id):
         service = self.get_wrapped_service()
-
-        existing_track_ids = self.tracks_in_playlist.get(playlist.service_id, [])
-        if not existing_track_ids:
-            existing_track_ids = self.tracks_in_playlist[playlist.service_id] = [t['track']['id'] for t in self.list_tracks_in_playlist(playlist)]
-
-        track_id = self.get_track_id(link)
-        if track_id in existing_track_ids:
-            return False, 'Already in playlist'
-
-        try:
-            track_info = self.get_track_info(track_id)
-        except SpotifyException as e:
-            return False, "Something went wrong finding that track"
-
-        if not track_info:
-            return False, "No such track found"
 
         try:
             resp = service.user_playlist_add_tracks(user=self.get_user_info_from_spotify()['id'],
                                                     playlist_id=playlist.service_id,
                                                     tracks=[track_id])
         except SpotifyException as e:
-            return False, "Something went wrong adding that track"
+            return False, e
 
+        track_info = self.get_track_info(track_id=track_id)
         if not resp['snapshot_id']:
             return False, "Unable to add %s to %s" % (track_info['name'], playlist.name)
 
-        existing_track_ids.append(track_id)
-        self.tracks_in_playlist[playlist.service_id] = existing_track_ids
+        self.tracks_in_playlist[playlist.service_id].add(track_id)
 
         artist_names = [artist['name'] for artist in track_info['artists']]
 
