@@ -319,29 +319,40 @@ def slack_events():
 
     if not playlists_in_channel:
         return
-    successful_playlists = []
-    failed_playlists = []
-    title = None
 
+    successful_playlists = []
+    failure_messages = []
+    title_or_failure_msg = ""
+    title = "(missing title)"
     for pl in playlists_in_channel:
         credentials = pl.user.credentials_for_service(pl.service)
         music_service = ServiceBase.from_enum(pl.service)(credentials=credentials)
-        success, title = music_service.add_link_to_playlist(pl, link)
+        success, title_or_failure_msg = music_service.add_link_to_playlist(pl, link)
 
         if success:
-            title = title
+            title = title_or_failure_msg
             successful_playlists.append(pl.name)
         else:
-            failed_playlists.append(pl.name)
+            failure_messages.append(("%s (%s)" % (pl.name, title_or_failure_msg)))
 
+    response_message = "Something done got real fucked up... you should probably talk to @matt"
+    success_message = None
+    failure_message = None
     if successful_playlists:
-        msg_end = "playlist *%s*" % successful_playlists[0]
-        if len(successful_playlists) > 1:
-            msg_end = "playlists: *%s*" % ", ".join(successful_playlists)
+        success_message = "Added %s to playlists: *%s*" % (title, ", ".join(successful_playlists))
+    if failure_messages:
+        failure_message = "Failed to add track to playlists: %s" % (",".join(failure_messages))
 
-        post_update_to_chat(url=SlackUrl.POST_MESSAGE.value,
-                            payload={
-                                "channel": channel,
-                                "text": "Added *%s* to %s" % (title, msg_end)
-                            })
+    if success_message:
+        response_message = success_message
+        if failure_message:
+            response_message += "\n%s" % failure_message
+    elif failure_message:
+        response_message = failure_message
+
+    post_update_to_chat(url=SlackUrl.POST_MESSAGE.value,
+                        payload={
+                            "channel": channel,
+                            "text": response_message
+                        })
     return "Ok", 200
