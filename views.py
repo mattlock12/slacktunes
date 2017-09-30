@@ -341,7 +341,7 @@ def slack_events():
     if successful_playlists:
         success_message = "Added %s to playlists: *%s*" % (title, ", ".join(successful_playlists))
     if failure_messages:
-        failure_message = "Failed to add track to playlists: %s" % (",".join(failure_messages))
+        failure_message = "Failed to add track to playlists: *%s*" % (",".join(failure_messages))
 
     if success_message:
         response_message = success_message
