@@ -176,7 +176,7 @@ class Youtube(ServiceBase):
         return playlists
 
     @credentials_required
-    def create_playlist(self, playlist_name, user_id):
+    def create_playlist(self, playlist_name):
         service = self.get_wrapped_service()
 
         channels_response = service.channels().list(part='id', mine=True).execute()
@@ -317,7 +317,7 @@ class Spotify(ServiceBase):
         return track_info
 
     @credentials_required
-    def create_playlist(self, playlist_name, user_id):
+    def create_playlist(self, playlist_name):
         service = self.get_wrapped_service()
 
         spotify_user_info = self.get_user_info_from_spotify()

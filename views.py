@@ -1,9 +1,14 @@
-import base64
 import json
 import logging
+from logging.handlers import RotatingFileHandler
+
+logger = logging.getLogger(__name__)
+handler = RotatingFileHandler('slacktunes.log', maxBytes=1000, backupCount=1)
+handler.setLevel(logging.INFO)
+logger.addHandler(handler)
 
 import requests
-from flask import current_app, render_template, jsonify, redirect, request, make_response, url_for
+from flask import render_template, jsonify, redirect, request, url_for
 from functools import wraps
 
 from application import application
@@ -13,17 +18,18 @@ from music_services import ServiceBase
 from settings import BASE_URI, SLACK_CLIENT_ID, SLACK_CLIENT_SECRET, SLACK_OAUTH_TOKEN, SLACK_VERIFICATION_TOKEN
 from utils import get_links
 
-logger = logging.getLogger(__name__)
-
 
 # UTILITY DECORATOR
 def verified_slack_request(f):
     @wraps(f)
     def decorated_function(*args, **kwargs):
+        request_data_dict = {}
+
         if request.data:
             request_data_dict = json.loads(request.data.decode('utf-8'))
         elif request.form:
             request_data_dict = request.form
+
         if request_data_dict['token'] != SLACK_VERIFICATION_TOKEN:
             return "Not verified slack message", 400
         return f(*args, **kwargs)
@@ -182,7 +188,7 @@ def create_playlist():
 
     music_service = ServiceBase.from_string(music_service_enum.name)(credentials=credentials)
 
-    success, playlist_snippet = music_service.create_playlist(playlist_name=playlist_name, user_id=user.id)
+    success, playlist_snippet = music_service.create_playlist(playlist_name=playlist_name)
     if not success:
         return "Unable to create playlist", 200
 
@@ -290,10 +296,11 @@ def delete_playlist():
 @application.route("/slack_events/", methods=['POST'])
 @verified_slack_request
 def slack_events():
-    if request.data and json.loads(request.data.decode('utf-8')).get('challenge'):
-        return json.loads(request.data.decode('utf-8')).get('challenge'), 200
-
     request_data_dict = json.loads(request.data.decode('utf-8'))
+
+    if request.data and request_data_dict.get('challenge'):
+        return request_data_dict.get('challenge'), 200
+
     event = request_data_dict.get('event')
     if not event:
         logger.error("Received event from slack with no event")
