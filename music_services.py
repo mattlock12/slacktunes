@@ -34,7 +34,6 @@ def credentials_required(f):
     return decorated_function
 
 
-
 class ServiceBase(object):
     def __init__(self, credentials):
         self.credentials = credentials
