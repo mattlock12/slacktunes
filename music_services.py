@@ -356,7 +356,7 @@ class Spotify(ServiceBase):
                                                       playlist_id=playlist.service_id)
         tracks = set()
         while tracks_request:
-            tracks = tracks|set(tracks_request['items'])
+            tracks = tracks | set(tracks_request['items'])
             tracks_request = service.next(tracks_request)
 
         return tracks

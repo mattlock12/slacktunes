@@ -30,15 +30,15 @@ def verified_slack_request(f):
         elif request.form:
             request_data_dict = request.form
 
-        if request_data_dict['token'] != SLACK_VERIFICATION_TOKEN:
+        if request_data_dict.get('token', None) != SLACK_VERIFICATION_TOKEN:
             return "Not verified slack message", 400
         return f(*args, **kwargs)
     return decorated_function
 
 
-def post_update_to_chat(url, payload):
+def post_update_to_chat(payload):
     payload.update({"token": SLACK_OAUTH_TOKEN})
-    res = requests.post(url=url, data=payload)
+    res = requests.post(url=SlackUrl.POST_MESSAGE.value, data=payload)
 
     return res.text, res.status_code
 
@@ -85,48 +85,48 @@ def slackoauth():
 
 def credential_exchange(service_enum):
     service = ServiceBase.from_enum(service_enum)
+
     if 'code' not in request.args:
-        return "No longer serviced by this view", 400
-    elif 'state' not in request.args:
-        return "No state param returned", 400
+        return "No code in request args", 400
+
+    if 'state' not in request.args:
+        return "No state param in request args", 400
+
+    state = request.args.get('state', ":")
+    slack_user_id, slack_username = state.split(':')
+    if not slack_user_id or not slack_username:
+        return "No userdata to associate", 400
+
+    code = request.args.get('code')
+    credentials = service.exchange(code=code, state=state)
+    logger.info("Successfully got credentials from %s" % service_enum.name.title())
+
+    user = User.query.filter_by(slack_id=slack_user_id).first()
+    if not user:
+        user = User(slack_id=slack_user_id, name=slack_username)
+        user.save()
+
+    creds = [creds for creds in user.credentials if creds.service is service_enum]
+    if not creds:
+        user_credentials = Credential(user_id=user.id, service=service_enum, credentials=credentials.to_json())
     else:
-        state = request.args.get('state', ":")
-        slack_user_id, slack_username = state.split(':')
-        if not slack_user_id or not slack_username:
-            return "No userdata to associate", 400
-        code = request.args.get('code')
-        credentials = service.exchange(code=code, state=state)
-        logger.info("Successfully got credentials from %s" % service_enum.name.title())
+        user_credentials = creds[0]
+        user_credentials.credentials = credentials.to_json()
+    user_credentials.save()
 
-        user = User.query.filter_by(slack_id=slack_user_id).first()
-        if not user:
-            user = User(slack_id=slack_user_id, name=slack_username)
-            user.save()
-
-        creds = [creds for creds in user.credentials if creds.service is service_enum]
-        if not creds:
-            user_credentials = Credential(user_id=user.id, service=service_enum, credentials=credentials.to_json())
-        else:
-            user_credentials = creds[0]
-            user_credentials.credentials = credentials.to_json()
-        user_credentials.save()
-
-        return jsonify("Succesfully authed with %s!" % service_enum.name.title(), 200)
+    return jsonify("Succesfully authed with %s!" % service_enum.name.title(), 200)
 
 
 # route used for youtube oauth flow
 @application.route('/youtubeoauth2callback')
 def youtubeoauth2callback():
-    service_enum = MusicService.YOUTUBE
+    return credential_exchange(service_enum=MusicService.YOUTUBE)
 
-    return credential_exchange(service_enum=service_enum)
 
 # route used for spotify redirect
 @application.route('/spotifyoauth2callback')
 def spotifyoauth2callback():
-    service_enum = MusicService.SPOTIFY
-
-    return credential_exchange(service_enum=service_enum)
+    return credential_exchange(service_enum=MusicService.SPOTIFY)
 
 
 @application.route('/list_playlists/', methods=['POST'])
@@ -138,11 +138,7 @@ def list_playlists():
     playlists_with_services = ["*%s* (%s)" % (pl.name, pl.service.name.title()) for pl in playlists]
     msg_body = "Found *%s* playlists in this channel: \n%s" % (len(playlists), "\n".join(playlists_with_services))
 
-    post_update_to_chat(SlackUrl.POST_MESSAGE.value,
-                        payload={
-                            "channel": channel_id,
-                            "text": msg_body
-                        })
+    post_update_to_chat(payload={"channel": channel_id, "text": msg_body})
 
     return "", 200
 
@@ -192,16 +188,21 @@ def create_playlist():
     if not success:
         return "Unable to create playlist", 200
 
-    playlist = Playlist.query.filter_by(user_id=user.id, name=playlist_name, service=music_service_enum, channel_id=channel_id).first()
-    if not playlist:
-        playlist = Playlist(name=playlist_name,
-                            channel_id=channel_id,
-                            service=music_service_enum,
-                            service_id=playlist_snippet['id'],
-                            user_id=user.id)
-        playlist.save()
+    playlist = Playlist.query.filter_by(
+        user_id=user.id, name=playlist_name, service=music_service_enum, channel_id=channel_id).first()
+    if playlist:
+        return "Found a playlist %s (%s) for %s in this channel already" % (
+            playlist_name, music_service_enum.name, slack_user_name)
 
-    return "Created playlist %s for %s in this channel! Might I suggest /scrape_music next?" % (playlist_name, slack_user_name), 200
+    playlist = Playlist(name=playlist_name,
+                        channel_id=channel_id,
+                        service=music_service_enum,
+                        service_id=playlist_snippet['id'],
+                        user_id=user.id)
+    playlist.save()
+
+    return "Created playlist %s for %s in this channel! Might I suggest /scrape_music next?" % (
+        playlist_name, slack_user_name), 200
 
 
 @application.route('/scrape_music/', methods=['POST'])
@@ -214,7 +215,7 @@ def scrape_music():
     if not playlists_in_channel:
         return "No playlists in this channel. Use */create_playlist playlist_name service* to create one", 200
 
-    if len(playlists_in_channel) > 1 and not len(command_text_args):
+    if not len(command_text_args):
         return "Please specify a playlist name in your command", 200
 
     playlist_name = command_text_args[0]
@@ -225,7 +226,7 @@ def scrape_music():
     playlist = playlists_match[0]
     user = playlist.user
     if not user or not user.credentials:
-        return "Somehow there is no user associated with this playlist...", 200
+        return "Somehow there is no user associated with this playlist... Can't auth with music service", 200
 
     music_service = ServiceBase.from_enum(playlist.service)(credentials=user.credentials_for_service(playlist.service))
 
@@ -244,12 +245,18 @@ def scrape_music():
 
     links = get_links(channel_history=channel_history_jsonable)
     results = music_service.add_links_to_playlist(playlist, links)
-    successes = {m for s, m in results if s}
-    failures = {m for f, m in results if not f}
+    successes = set()
+    failures = set()
+    for s, m in results:
+        if s:
+            successes.add(m)
+        else:
+            failures.add(m)
     # TODO: make this better
     # TODO: async is the way
     failure_msg = "Failed to add %s video(s)" % len(failures)
     success_msg = "Added %s video(s) to %s\n%s" % (len(successes), playlist_name, failure_msg)
+
     return success_msg, 200
 
 
@@ -281,14 +288,15 @@ def delete_playlist():
         playlist_to_delete = [pl for pl in playlist_to_delete if pl.service is service_enum]
 
     if not playlist_to_delete:
-        return "Couldn't find a playlist named %s... I see these: %s" % \
-               (playlist_name, ", ".join(map(lambda p: "%s (%s)" % (p.name, p.service.name.title()), playlists))), 200
+        return "Couldn't find a playlist named %s... I see these: \n%s" % \
+               (playlist_name, "\n".join(map(lambda p: "%s (%s)" % (p.name, p.service.name.title()), playlists))), 200
     playlist_to_delete = playlist_to_delete[0]
 
     service = playlist_to_delete.service
     playlist_to_delete.delete()
 
-    return "Deleted slacktunes record of *%s* in channel *%s* \n Keep in mind, this won't delete the %s version, it'll only stop slacktunes" \
+    return "Deleted slacktunes record of *%s* in channel *%s* \n" \
+           " Keep in mind, this won't delete the %s version, it'll only stop slacktunes" \
            "from posting links to it" % (playlist_name, channel_name, service.name.title()), 200
 
 
@@ -296,9 +304,12 @@ def delete_playlist():
 @application.route("/slack_events/", methods=['POST'])
 @verified_slack_request
 def slack_events():
-    request_data_dict = json.loads(request.data.decode('utf-8'))
+    if not request.data:
+        logger.error("No request data sent to /slack_events")
+        return 400
 
-    if request.data and request_data_dict.get('challenge'):
+    request_data_dict = json.loads(request.data.decode('utf-8'))
+    if request_data_dict.get('challenge'):
         return request_data_dict.get('challenge'), 200
 
     event = request_data_dict.get('event')
@@ -357,9 +368,10 @@ def slack_events():
     elif failure_message:
         response_message = failure_message
 
-    post_update_to_chat(url=SlackUrl.POST_MESSAGE.value,
-                        payload={
-                            "channel": channel,
-                            "text": response_message
-                        })
+    post_update_to_chat(
+        payload={
+            "channel": channel,
+            "text": response_message
+        }
+    )
     return "Ok", 200
