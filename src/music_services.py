@@ -290,7 +290,10 @@ class Spotify(ServiceBase):
         return SimpleJSONWrapper(data_dict=creds)
 
     def get_track_id(self, link):
-        return url.split('/')[-1]
+        return link.split('/')[-1]
+
+    def is_same_service_link(self, link):
+        return 'spotify' in link
 
     @credentials_required
     def get_wrapped_service(self):
@@ -371,7 +374,7 @@ class Spotify(ServiceBase):
                                                       playlist_id=playlist.service_id)
         tracks = set()
         while tracks_request:
-            tracks = tracks | set(tracks_request['items'])
+            tracks = tracks | set(t['track']['id'] for t  in tracks_request['items'])
             tracks_request = service.next(tracks_request)
 
         return tracks
