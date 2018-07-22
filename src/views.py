@@ -1,6 +1,7 @@
 import json
 import logging
 from logging.handlers import RotatingFileHandler
+from threading import Thread
 
 logger = logging.getLogger(__name__)
 handler = RotatingFileHandler('slacktunes.log', maxBytes=1000, backupCount=1)
@@ -18,7 +19,7 @@ from application import application
 from .constants import InvalidEnumException, MusicService, SlackUrl
 from .models import Credential, Playlist, User
 from .music_services import ServiceBase
-from .utils import get_links
+from .utils import get_links, post_update_to_chat, add_link_to_playlists_from_event
 
 
 # UTILITY DECORATOR
@@ -38,11 +39,7 @@ def verified_slack_request(f):
     return decorated_function
 
 
-def post_update_to_chat(payload):
-    payload.update({"token": SLACK_OAUTH_TOKEN})
-    res = requests.post(url=SlackUrl.POST_MESSAGE.value, data=payload)
 
-    return res.text, res.status_code
 
 
 # VIEWS
@@ -190,7 +187,7 @@ def create_playlist():
         user_id=user.id, name=playlist_name, service=music_service_enum, channel_id=channel_id).first()
     if playlist:
         return "Found a playlist %s (%s) for %s in this channel already" % (
-            playlist_name, music_service_enum.name, slack_user_name)
+            playlist_name, music_service_enum.name.title(), slack_user_name)
 
     success, playlist_snippet = music_service.create_playlist(playlist_name=playlist_name)
     if not success:
@@ -323,54 +320,10 @@ def slack_events():
         logger.info("Received event that was not link_shared")
         return "Ok", 200
 
-    channel = event.get('channel')
-    logger.info("%s action received in channel %s" % (event.get('type'), channel))
-
-    links = event.get('links', None)
-    if not links:
-        logger.error("No links in event")
-        return "No link", 400
-
-    link = links[0]['url']
-    link_service = MusicService.from_link(link=link)
-
-    # TODO: change this for cross-service adding
-    playlists_in_channel = Playlist.query.filter_by(channel_id=channel, service=link_service).all()
-
-    if not playlists_in_channel:
-        return
-
-    successful_playlists = []
-    failure_messages = []
-    title_or_failure_msg = ""
-    title = "(missing title)"
-    for pl in playlists_in_channel:
-        credentials = pl.user.credentials_for_service(pl.service)
-        music_service = ServiceBase.from_enum(pl.service)(credentials=credentials)
-        success, title_or_failure_msg = music_service.add_link_to_playlist(pl, link)
-
-        if success:
-            title = title_or_failure_msg
-            successful_playlists.append(pl.name)
-        else:
-            failure_messages.append(("%s (%s)" % (pl.name, title_or_failure_msg)))
-
-    response_message = ""
-    if not successful_playlists and not failure_messages:
-        response_message = "Something done got real fucked up... you should probably talk to @matt"
-
-    if successful_playlists:
-        response_message += "Added %s to playlists: *%s*" % (title, ", ".join(successful_playlists))
-    if failure_messages:
-        if successful_playlists:
-            response_message += "\n"
-        response_message += "Failed to add track to playlists: *%s*" % (",".join(failure_messages))
-
-    post_update_to_chat(
-        payload={
-            "channel": channel,
-            "text": response_message
-        }
-    )
+    # start thread to do this because slack requires a fast response and checking for dupes takes time
+    t = Thread(
+        target=add_link_to_playlists_from_event,
+        args=(event, ))
+    t.start()
 
     return "Ok", 200

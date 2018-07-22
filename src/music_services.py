@@ -11,7 +11,6 @@ from settings import YOUTUBE_CLIENT_ID, YOUTUBE_CLIENT_SECRET, YOUTUBE_REDIRECT_
 
 from .constants import InvalidEnumException, MusicService
 from .oauth_wrappers import SpotipyClientCredentialsManager, SpotipyDBWrapper
-from .utils import strip_spotify_track_id, strip_youtube_video_id
 
 
 class NoCredentialsError(Exception):
@@ -151,7 +150,22 @@ class Youtube(ServiceBase):
         return 'yout' in link
 
     def get_track_id(self, link):
-        return strip_youtube_video_id(link)
+        video_id = None
+        if "v=" not in link:
+            # mobile video share
+            link_parts = link.split()
+            link = [p for p in link_parts if 'yout' in p]
+            if not link:
+                return None
+
+            return link[0].split('be/')[1]
+
+        link.split('?')
+        for param in link.split('&'):
+            if 'v=' in param:
+                video_id = param.split('=')[1]
+                break
+        return video_id
 
     @credentials_required
     def get_wrapped_service(self):
@@ -276,7 +290,7 @@ class Spotify(ServiceBase):
         return SimpleJSONWrapper(data_dict=creds)
 
     def get_track_id(self, link):
-        return strip_spotify_track_id(link)
+        return url.split('/')[-1]
 
     @credentials_required
     def get_wrapped_service(self):

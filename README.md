@@ -46,6 +46,10 @@ BASE_URI = <ngrok_url>
 
 ### NOTE:
 Every time you shut down ngrok and restart it, you'll have to change any place you're using `ngrok_url`
+#### Including:
+* slack
+* youtube developer apis
+* spotify developer apis
 
 #### Creating a Slack App for you workspace
 Create a new slack app at [https://api.slack.com/apps]. Name it whatever you want, but might I suggest `slacktunes_local`

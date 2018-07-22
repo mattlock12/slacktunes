@@ -1,24 +1,10 @@
-def strip_youtube_video_id(video_url):
-    video_id = None
-    if "v=" not in video_url:
-        # mobile video share
-        video_url_parts = video_url.split()
-        link = [p for p in video_url_parts if 'yout' in p]
-        if not link:
-            return None
+import requests
 
-        return link[0].split('be/')[1]
-
-    video_url.split('?')
-    for param in video_url.split('&'):
-        if 'v=' in param:
-            video_id = param.split('=')[1]
-            break
-    return video_id
-
-
-def strip_spotify_track_id(url):
-    return url.split('/')[-1]
+from .constants import SlackUrl
+from .models import Playlist
+from .music_services import ServiceBase, MusicService
+from .views import logger
+from settings import SLACK_OAUTH_TOKEN
 
 
 def get_links(channel_history):
@@ -29,3 +15,64 @@ def get_links(channel_history):
             if msg.get('attachments') and
             msg.get('attachments', [])[0] and
             msg['attachments'][0].get('from_url')}
+
+
+def post_update_to_chat(payload):
+    payload.update({"token": SLACK_OAUTH_TOKEN})
+    res = requests.post(url=SlackUrl.POST_MESSAGE.value, data=payload)
+
+    return res.text, res.status_code
+
+
+def add_link_to_playlists_from_event(event):
+    channel = event.get('channel')
+    logger.info("%s action received in channel %s" % (event.get('type'), channel))
+
+    links = event.get('links', None)
+    if not links:
+        logger.error("No links in event")
+        return "No link", 400
+
+    link = links[0]['url']
+    link_service = MusicService.from_link(link=link)
+
+    # TODO: change this for cross-service adding
+    playlists_in_channel = Playlist.query.filter_by(channel_id=channel, service=link_service).all()
+
+    if not playlists_in_channel:
+        return
+
+    successful_playlists = []
+    failure_messages = []
+    title_or_failure_msg = ""
+    title = "(missing title)"
+    for pl in playlists_in_channel:
+        credentials = pl.user.credentials_for_service(pl.service)
+        music_service = ServiceBase.from_enum(pl.service)(credentials=credentials)
+        success, title_or_failure_msg = music_service.add_link_to_playlist(pl, link)
+
+        if success:
+            title = title_or_failure_msg
+            successful_playlists.append(pl.name)
+        else:
+            failure_messages.append(("%s (%s)" % (pl.name, title_or_failure_msg)))
+
+    response_message = ""
+    if not successful_playlists and not failure_messages:
+        response_message = "Something done got real fucked up... you should probably talk to @matt"
+
+    if successful_playlists:
+        response_message += "Added *%s* to playlists: *%s*" % (title, ", ".join(successful_playlists))
+    if failure_messages:
+        if successful_playlists:
+            response_message += "\n"
+        response_message += "Failed to add track to playlists: *%s*" % (", ".join(failure_messages))
+
+    post_update_to_chat(
+        payload={
+            "channel": channel,
+            "text": response_message
+        }
+    )
+
+    return True
