@@ -1,12 +1,6 @@
 import json
-import logging
 from logging.handlers import RotatingFileHandler
 from threading import Thread
-
-logger = logging.getLogger(__name__)
-handler = RotatingFileHandler('slacktunes.log', maxBytes=1000, backupCount=1)
-handler.setLevel(logging.INFO)
-logger.addHandler(handler)
 
 import requests
 from flask import render_template, jsonify, redirect, request, url_for
@@ -98,7 +92,7 @@ def credential_exchange(service_enum):
 
     code = request.args.get('code')
     credentials = service.exchange(code=code, state=state)
-    logger.info("Successfully got credentials from %s" % service_enum.name.title())
+    application.logger.info("Successfully got credentials from %s" % service_enum.name.title())
 
     user = User.query.filter_by(slack_id=slack_user_id).first()
     if not user:
@@ -304,7 +298,7 @@ def delete_playlist():
 @verified_slack_request
 def slack_events():
     if not request.data:
-        logger.error("No request data sent to /slack_events")
+        application.logger.error("No request data sent to /slack_events")
         return 400
 
     request_data_dict = json.loads(request.data.decode('utf-8'))
@@ -313,11 +307,11 @@ def slack_events():
 
     event = request_data_dict.get('event')
     if not event:
-        logger.error("Received event from slack with no event")
+        application.logger.error("Received event from slack with no event")
         return "No event", 400
 
     if event.get('type') != 'link_shared':
-        logger.info("Received event that was not link_shared")
+        application.logger.info("Received event that was not link_shared")
         return "Ok", 200
 
     # start thread to do this because slack requires a fast response and checking for dupes takes time

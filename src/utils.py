@@ -3,7 +3,8 @@ import requests
 from .constants import SlackUrl
 from .models import Playlist
 from .music_services import ServiceBase, MusicService
-from .views import logger
+
+from application import application
 from settings import SLACK_OAUTH_TOKEN
 
 
@@ -26,11 +27,11 @@ def post_update_to_chat(payload):
 
 def add_link_to_playlists_from_event(event):
     channel = event.get('channel')
-    logger.info("%s action received in channel %s" % (event.get('type'), channel))
+    application.logger.info("%s action received in channel %s" % (event.get('type'), channel))
 
     links = event.get('links', None)
     if not links:
-        logger.error("No links in event")
+        application.logger.error("No links in event")
         return "No link", 400
 
     link = links[0]['url']
