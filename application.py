@@ -1,11 +1,5 @@
-import uuid
+from app import application
+from src.views import *
 
-from flask import Flask
-from flask_sqlalchemy import SQLAlchemy
-
-from settings import DB_URI
-
-application = Flask(__name__)
-application.config['SQLALCHEMY_DATABASE_URI'] = DB_URI
-application.secret_key = str(uuid.uuid4())
-db = SQLAlchemy(application)
+if __name__ == '__main__':
+    application.run(host='0.0.0.0', port=8000)

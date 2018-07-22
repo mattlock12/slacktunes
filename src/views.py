@@ -15,7 +15,7 @@ from functools import wraps
 
 from settings import BASE_URI, SLACK_CLIENT_ID, SLACK_CLIENT_SECRET, SLACK_OAUTH_TOKEN, SLACK_VERIFICATION_TOKEN
 
-from application import application
+from app import application
 from .constants import InvalidEnumException, MusicService, SlackUrl
 from .models import Credential, Playlist, User
 from .music_services import ServiceBase
