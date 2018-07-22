@@ -10,6 +10,7 @@ venv/*
 # local dev
 local_settings.py
 credentials*json
+*local_settings*.py
 
 # Elastic Beanstalk Files
 .elasticbeanstalk/*
