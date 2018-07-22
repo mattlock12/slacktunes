@@ -297,6 +297,7 @@ def delete_playlist():
 @application.route("/slack_events/", methods=['POST'])
 @verified_slack_request
 def slack_events():
+    application.logger.info("Received event")
     if not request.data:
         application.logger.error("No request data sent to /slack_events")
         return 400
