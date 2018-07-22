@@ -1,11 +1,11 @@
 import datetime
 import json
-from oauth2client.client import OAuth2Credentials
 
+from oauth2client.client import OAuth2Credentials
 from sqlalchemy import UniqueConstraint
 
 from application import db
-from constants import MusicService
+from .constants import MusicService
 
 
 def now():

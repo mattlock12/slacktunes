@@ -7,10 +7,11 @@ from oauth2client.client import OAuth2WebServerFlow
 from spotipy import Spotify as Spotipy
 from spotipy.client import SpotifyException
 
-from constants import InvalidEnumException, MusicService
-from oauth_wrappers import SpotipyClientCredentialsManager, SpotipyDBWrapper
 from settings import YOUTUBE_CLIENT_ID, YOUTUBE_CLIENT_SECRET, YOUTUBE_REDIRECT_URI, SPOTIFY_CLIENT_ID, SPOTIFY_CLIENT_SECRET, SPOTIFY_REDIRECT_URI
-from utils import strip_spotify_track_id, strip_youtube_video_id
+
+from .constants import InvalidEnumException, MusicService
+from .oauth_wrappers import SpotipyClientCredentialsManager, SpotipyDBWrapper
+from .utils import strip_spotify_track_id, strip_youtube_video_id
 
 
 class NoCredentialsError(Exception):
@@ -139,8 +140,8 @@ class Youtube(ServiceBase):
         },
         "kind": "youtube#playlist",
         "snippet": {
-            "description": "slacktunes created playlist! Check out https://slacktunes.me", # The playlist's description.
-            "tags": [ "slacktunes",],
+            "description": "slacktunes created playlist! Check out https://slacktunes.me",
+            "tags": ["slacktunes", ],
             "channelId": channel_id,
             "title": playlist_name,
             },

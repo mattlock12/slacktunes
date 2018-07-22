@@ -11,12 +11,14 @@ import requests
 from flask import render_template, jsonify, redirect, request, url_for
 from functools import wraps
 
-from application import application
-from constants import InvalidEnumException, MusicService, SlackUrl
-from models import Credential, Playlist, User
-from music_services import ServiceBase
+
 from settings import BASE_URI, SLACK_CLIENT_ID, SLACK_CLIENT_SECRET, SLACK_OAUTH_TOKEN, SLACK_VERIFICATION_TOKEN
-from utils import get_links
+
+from application import application
+from .constants import InvalidEnumException, MusicService, SlackUrl
+from .models import Credential, Playlist, User
+from .music_services import ServiceBase
+from .utils import get_links
 
 
 # UTILITY DECORATOR
@@ -182,17 +184,17 @@ def create_playlist():
         return "No verified auth for %s. Please go to %s%s and allow access" % \
                (slack_user_name, BASE_URI, url_for('auth', service=music_service_enum.name.lower(), userdata=state))
 
-    music_service = ServiceBase.from_string(music_service_enum.name)(credentials=credentials)
-
-    success, playlist_snippet = music_service.create_playlist(playlist_name=playlist_name)
-    if not success:
-        return "Unable to create playlist", 200
+    music_service = ServiceBase.from_enum(music_service_enum)(credentials=credentials)
 
     playlist = Playlist.query.filter_by(
         user_id=user.id, name=playlist_name, service=music_service_enum, channel_id=channel_id).first()
     if playlist:
         return "Found a playlist %s (%s) for %s in this channel already" % (
             playlist_name, music_service_enum.name, slack_user_name)
+
+    success, playlist_snippet = music_service.create_playlist(playlist_name=playlist_name)
+    if not success:
+        return "Unable to create playlist", 200
 
     playlist = Playlist(name=playlist_name,
                         channel_id=channel_id,
@@ -288,8 +290,8 @@ def delete_playlist():
         playlist_to_delete = [pl for pl in playlist_to_delete if pl.service is service_enum]
 
     if not playlist_to_delete:
-        return "Couldn't find a playlist named %s... I see these: \n%s" % \
-               (playlist_name, "\n".join(map(lambda p: "%s (%s)" % (p.name, p.service.name.title()), playlists))), 200
+        existing_in_channel = "\n".join("%s (%s)" % (p.name, p.service.name.title()) for p in playlists)
+        return "Couldn't find a playlist named %s... I see these: \n%s" % (playlist_name, existing_in_channel), 200
     playlist_to_delete = playlist_to_delete[0]
 
     service = playlist_to_delete.service
@@ -353,20 +355,16 @@ def slack_events():
         else:
             failure_messages.append(("%s (%s)" % (pl.name, title_or_failure_msg)))
 
-    response_message = "Something done got real fucked up... you should probably talk to @matt"
-    success_message = None
-    failure_message = None
-    if successful_playlists:
-        success_message = "Added %s to playlists: *%s*" % (title, ", ".join(successful_playlists))
-    if failure_messages:
-        failure_message = "Failed to add track to playlists: *%s*" % (",".join(failure_messages))
+    response_message = ""
+    if not successful_playlists and not failure_messages:
+        response_message = "Something done got real fucked up... you should probably talk to @matt"
 
-    if success_message:
-        response_message = success_message
-        if failure_message:
-            response_message += "\n%s" % failure_message
-    elif failure_message:
-        response_message = failure_message
+    if successful_playlists:
+        response_message += "Added %s to playlists: *%s*" % (title, ", ".join(successful_playlists))
+    if failure_messages:
+        if successful_playlists:
+            response_message += "\n"
+        response_message += "Failed to add track to playlists: *%s*" % (",".join(failure_messages))
 
     post_update_to_chat(
         payload={
@@ -374,4 +372,5 @@ def slack_events():
             "text": response_message
         }
     )
+
     return "Ok", 200

@@ -3,8 +3,8 @@ import time
 
 from spotipy import oauth2
 
-from constants import MusicService
-from models import User
+from .constants import MusicService
+from .models import User
 
 from settings import SPOTIFY_CLIENT_ID, SPOTIFY_CLIENT_SECRET, SPOTIFY_REDIRECT_URI
 
