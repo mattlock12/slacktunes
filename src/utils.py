@@ -86,7 +86,7 @@ def add_link_to_playlists_from_event(event):
         failure_messages.append("Couldn't get track info for track... this means cross-platform sharing won't work")
         return post_messages_after_link_shared(native_track_info, channel, successful_playlists, failure_messages)
 
-    # add to cross_service playlists, using the first success to get track info and add from id after that
+    # add to cross_service playlists, using the target service to get track info and add from id after that
     # TODO: there are only 2 services now, so this works. But there may be more in the future
     cs_track_info = None
     for cpl in cross_service_playlists:
