@@ -51,6 +51,7 @@ class ServiceBase(object):
     def __init__(self, credentials):
         self.credentials = credentials
         self.service = None
+        self.track_info = {}
         self.tracks_in_playlist = {}
 
     @classmethod
@@ -236,27 +237,34 @@ class Youtube(ServiceBase):
     def list_tracks_in_playlist(self, playlist):
         service = self.get_wrapped_service()
 
-        video_ids = set()
+        tracks = []
         playlist_items_list_request = service.playlistItems().list(part='snippet', playlistId=playlist.service_id, maxResults=50)
         while playlist_items_list_request:
             playlist_items_list_response = playlist_items_list_request.execute()
-            for item in playlist_items_list_response['items']:
-                video_ids.add(item['snippet']['resourceId']['videoId'])
+            tracks += [
+                TrackInfo(
+                    track_id=item['snippet']['resourceId']['videoId'],
+                    name=item['snippet']['title']
+                )
+                for item in playlist_items_list_response['items']
+            ]
 
             playlist_items_list_request = service.playlistItems().list_next(playlist_items_list_request, playlist_items_list_response)
 
-        return video_ids
+        return tracks
 
     @credentials_required
     def add_track_to_playlist_by_track_id(self, playlist, track_id):
         service = self.get_wrapped_service()
 
-        existing_track_ids = self.tracks_in_playlist.get(playlist.service_id, set())
-        if not existing_track_ids:
-            existing_track_ids = self.tracks_in_playlist[playlist.service_id] = self.list_tracks_in_playlist(playlist)
+        existing_tracks = self.tracks_in_playlist.get(playlist.service_id, [])
+        if not existing_tracks:
+            existing_tracks = self.tracks_in_playlist[playlist.service_id] = self.list_tracks_in_playlist(playlist)
+
+        existing_track_ids = set(t.track_id for t in existing_tracks)
 
         if track_id in existing_track_ids:
-            return False, None, "Already in playlist"
+            return False, [et for et in existing_tracks if et.track_id == track_id][0], "Already in playlist"
 
         resource_body = {
             'kind': 'youtube#playlistItem',
@@ -272,8 +280,10 @@ class Youtube(ServiceBase):
         # let exceptions bubble up
         resp = service.playlistItems().insert(part='snippet', body=resource_body).execute()
         if not self.tracks_in_playlist.get(playlist.service_id, None):
-            self.tracks_in_playlist[playlist.service_id] = set()
-        self.tracks_in_playlist[playlist.service_id].add(track_id)
+            self.tracks_in_playlist[playlist.service_id] = []
+        self.tracks_in_playlist[playlist.service_id].append(
+            TrackInfo(track_id=track_id, name=resp['snippet']['title'])
+        )
 
         return True, TrackInfo(name=resp['snippet']['title']), ''
 
@@ -334,7 +344,6 @@ class Spotify(ServiceBase):
     def __init__(self, *args, **kwargs):
         super(Spotify, self).__init__(*args, **kwargs)
         self.user_info = None
-        self.track_info = {}
 
     @classmethod
     def get_flow(cls, state=None):
@@ -439,9 +448,16 @@ class Spotify(ServiceBase):
 
         tracks_request = service.user_playlist_tracks(user=self.get_user_info_from_spotify()['id'],
                                                       playlist_id=playlist.service_id)
-        tracks = set()
+        tracks = []
         while tracks_request:
-            tracks = tracks | set(t['track']['id'] for t  in tracks_request['items'])
+            tracks += [
+                TrackInfo(
+                    track_id=t['track']['id'],
+                    name=t['track']['name'],
+                    artist=", ".join(a['name'] for a in t['track']['artists'])
+                )
+                for t in tracks_request['items']
+            ]
             tracks_request = service.next(tracks_request)
 
         return tracks
@@ -452,7 +468,8 @@ class Spotify(ServiceBase):
         track_id = self.get_track_id(link)
         track_info = self.get_track_info(track_id)
 
-        return TrackInfo(name=track_info['name'], artist=track_info['name'], track_id=track_id)
+        return TrackInfo(
+            name=track_info['name'], artist=", ".join(a['name'] for a in track_info['artists']), track_id=track_id)
 
     @credentials_required
     def get_native_track_info_from_track_info(self, track_info):
@@ -473,12 +490,13 @@ class Spotify(ServiceBase):
     def add_track_to_playlist_by_track_id(self, playlist, track_id):
         service = self.get_wrapped_service()
 
-        existing_track_ids = self.tracks_in_playlist.get(playlist.service_id, None)
-        if not existing_track_ids:
-            existing_track_ids = self.list_tracks_in_playlist(playlist)
+        existing_tracks = self.tracks_in_playlist.get(playlist.service_id, None)
+        if not existing_tracks:
+            existing_tracks = self.tracks_in_playlist[playlist.service_id] = self.list_tracks_in_playlist(playlist)
 
+        existing_track_ids = set(t.track_id for t in existing_tracks)
         if track_id in existing_track_ids:
-            return False, None, "Already in playlist"
+            return False, [et for et in existing_tracks if et.track_id == track_id], "Already in playlist"
 
         try:
             resp = service.user_playlist_add_tracks(user=self.get_user_info_from_spotify()['id'],
@@ -494,9 +512,11 @@ class Spotify(ServiceBase):
         if not self.tracks_in_playlist.get(playlist.service_id):
             self.tracks_in_playlist[playlist.service_id] = set()
 
-        self.tracks_in_playlist[playlist.service_id].add(track_id)
-
         artist_names = ", ".join([artist['name'] for artist in track_info['artists']])
+
+        self.tracks_in_playlist[playlist.service_id].append(
+            TrackInfo(track_id=track_id, name=track_info['name'], artist=artist_names)
+        )
 
         return True, TrackInfo(name=track_info['name'], artist=artist_names), ''
 
