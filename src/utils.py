@@ -117,11 +117,11 @@ def post_messages_after_link_shared(track_info, channel, successful_playlists, f
         response_message = "Something done got real fucked up... you should probably talk to @matt"
 
     if successful_playlists:
-        response_message += "Added *%s* to playlists:\n*%s*" % (title, "\n".join(successful_playlists))
+        response_message += "Added *%s* to playlists:\n%s" % (title, "\n".join("*%s*" % pl for pl in successful_playlists))
     if failure_messages:
         if successful_playlists:
             response_message += "\n"
-        response_message += "Failed to add track to playlists:\n*%s*" % ("\n".join(failure_messages))
+        response_message += "Failed to add track to playlists:\n%s" % ("\n".join("*%s*" % msg for msg in failure_messages))
 
     post_update_to_chat(
         payload={
