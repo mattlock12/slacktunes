@@ -1,6 +1,8 @@
 import json
 import httplib2
+import re
 from functools import wraps
+from fuzzywuzzy import fuzz, process
 
 from apiclient.discovery import build
 from oauth2client.client import OAuth2WebServerFlow
@@ -9,7 +11,7 @@ from spotipy.client import SpotifyException
 
 from settings import YOUTUBE_CLIENT_ID, YOUTUBE_CLIENT_SECRET, YOUTUBE_REDIRECT_URI, SPOTIFY_CLIENT_ID, SPOTIFY_CLIENT_SECRET, SPOTIFY_REDIRECT_URI
 
-from .constants import InvalidEnumException, MusicService
+from .constants import BAD_WORDS, InvalidEnumException, MusicService
 from .oauth_wrappers import SpotipyClientCredentialsManager, SpotipyDBWrapper
 
 
@@ -122,6 +124,10 @@ class ServiceBase(object):
 
     @credentials_required
     def get_native_track_info_from_track_info(self, track_info):
+        raise NotImplementedError
+
+    @credentials_required
+    def search(self, search_string, *args, **kwargs):
         raise NotImplementedError
 
 
@@ -314,9 +320,18 @@ class Youtube(ServiceBase):
         return TrackInfo(name=results['items'][0]['snippet']['title'], track_id=track_id)
 
     @credentials_required
-    def get_native_track_info_from_track_info(self, track_info):
+    def search(self, search_string, **kwargs):
         service = self.get_wrapped_service()
-        results = service.search().list(q=track_info.get_track_name(), part='snippet', maxResults=10).execute()
+        search_kwargs = {
+            'part': 'snippet',
+            'maxResults': 10,
+            'type': 'video'
+        }
+        search_kwargs.update(kwargs)
+        return service.search().list(q=search_string, **search_kwargs).execute()
+
+    def get_native_track_info_from_track_info(self, track_info):
+        results = self.search(search_string=track_info.get_track_name())
         if not results['items']:
             return None
 
@@ -324,14 +339,16 @@ class Youtube(ServiceBase):
         if not items:
             return None
 
-        best_result = items[0]
-        # TODO
-        # for item in items:
-        #     snippet = item['snippet']
-        #     if snippet['channelTitle'] in PREFERRED_CHANNELS:
-        #         best_result = item['snippet']
+        best_result = (None, 0)
+        for item in items:
+            contender = fuzz.token_sort_ratio(track_info.get_track_name(), item['snippet']['title'])
+            if contender > best_result[1]:
+                best_result = (item, contender)
 
-        return TrackInfo(name=best_result['snippet']['title'], track_id=best_result['id']['videoId'])
+        if not best_result[0]:
+            return None
+
+        return TrackInfo(name=best_result[0]['snippet']['title'], track_id=best_result[0]['id']['videoId'])
 
 
 class Spotify(ServiceBase):
@@ -363,7 +380,10 @@ class Spotify(ServiceBase):
         return SimpleJSONWrapper(data_dict=creds)
 
     def get_track_id(self, link):
-        return link.split('/')[-1]
+        if link.find('spotify:track') != -1:
+            return link.split(':')[-1]
+
+        return link.split('/')[-1].split('?')[0]
 
     def is_same_service_link(self, link):
         return 'spotify' in link
@@ -467,10 +487,29 @@ class Spotify(ServiceBase):
     def get_track_info_from_link(self, link):
         return self.get_track_info(track_id=self.get_track_id(link))
 
+    def prep_track_name_for_search(self, title):
+        new_title = re.sub(r"[&'_-]", "", title)
+        new_title = re.sub(r'\([^)]*\)', '', new_title)
+        new_title = re.sub(r'\[[^]]*\]', '', new_title)
+
+        for word in BAD_WORDS:
+            replacer = re.compile(word, re.IGNORECASE)
+            new_title = replacer.sub('', new_title)
+        return new_title
+
     @credentials_required
-    def get_native_track_info_from_track_info(self, track_info):
+    def search(self, search_string, **kwargs):
         service = self.get_wrapped_service()
-        results = service.search(q=track_info.get_track_name(), market='US', type='track', limit=5)
+        search_kwargs = {
+            'market': 'US',
+            'type': 'track',
+            'limit': 10
+        }
+        search_kwargs.update(kwargs)
+        return service.search(q=self.prep_track_name_for_search(search_string), **search_kwargs)
+
+    def get_native_track_info_from_track_info(self, track_info):
+        results = self.search(search_string=track_info.get_track_name())
 
         if not results['tracks']:
             return None
@@ -478,12 +517,22 @@ class Spotify(ServiceBase):
             return None
 
         items = results['tracks']['items']
-        best_result = items[0]
+
+        best_result = (None, 0)
+        for item in items:
+            contender_name = item['name']
+            contender_artist = " ".join(a['name'] for a in item['artists'])
+            contender = fuzz.token_sort_ratio(track_info.get_track_name(), "%s %s" % (contender_name, contender_artist))
+            if contender > best_result[1]:
+                best_result = (item, contender)
+
+        if not best_result[0]:
+            return None
 
         return TrackInfo(
-            name=best_result['name'],
-            artist=", ".join(a['name'] for a in best_result['artists']),
-            track_id=best_result['id']
+            name=best_result[0]['name'],
+            artist=", ".join(a['name'] for a in best_result[0]['artists']),
+            track_id=best_result[0]['id']
         )
 
     @credentials_required

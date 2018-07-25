@@ -38,3 +38,6 @@ class MusicService(Enum):
             return cls.GMUSIC
         else:
             return None
+
+
+BAD_WORDS = ['EP', 'Full', 'Official', 'Lyrics', 'Lyric', 'Video', 'Album', 'HD', 'SD', 'HQ']
