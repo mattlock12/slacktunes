@@ -40,4 +40,4 @@ class MusicService(Enum):
             return None
 
 
-BAD_WORDS = ['EP', 'Full', 'Official', 'Lyrics', 'Lyric', 'Video', 'Album', 'HD', 'SD', 'HQ']
+BAD_WORDS = ['EP', 'Full', 'Official', 'Lyrics', 'Lyric', 'Video', 'Album', 'HD', 'SD', 'HQ', 'by', 'single', 'version']

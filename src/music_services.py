@@ -342,7 +342,7 @@ class Youtube(ServiceBase):
         best_result = (None, 0)
         for item in items:
             contender = fuzz.token_sort_ratio(track_info.get_track_name(), item['snippet']['title'])
-            if contender > best_result[1]:
+            if contender > best_result[1] and contender > 50:
                 best_result = (item, contender)
 
         if not best_result[0]:
@@ -529,7 +529,7 @@ class Spotify(ServiceBase):
             contender_name = item['name']
             contender_artist = " ".join(a['name'] for a in item['artists'])
             contender = fuzz.token_sort_ratio(track_info.get_track_name(), "%s %s" % (contender_name, contender_artist))
-            if contender > best_result[1]:
+            if contender > best_result[1] and contender > 50:
                 best_result = (item, contender)
 
         if not best_result[0]:
