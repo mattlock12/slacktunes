@@ -42,11 +42,14 @@ def add_link_to_playlists_from_event(event):
         if not playlists_in_channel:
             return
 
-        successful_playlists = []
-        failure_messages = []
+        native_successes = []
+        native_failures = []
+        cs_successes = []
+        cs_failures = []
         track_info = None
         message  = ""
         native_track_info = None
+        cs_track_info = None
 
         native_playlists = [pl for pl in playlists_in_channel if pl.service is link_service]
         cross_service_playlists = [cpl for cpl in playlists_in_channel if cpl.service is not link_service]
@@ -59,9 +62,9 @@ def add_link_to_playlists_from_event(event):
 
             if success:
                 native_track_info = track_info
-                successful_playlists.append("%s (%s)" % (pl.name, pl.service.name.title()))
+                native_successes.append("%s (%s)" % (pl.name, pl.service.name.title()))
             else:
-                failure_messages.append("%s (%s) - %s" % (pl.name, pl.service.name.title(), message))
+                native_failures.append("%s (%s) - %s" % (pl.name, pl.service.name.title(), message))
 
         # it's possible that there are no native playlists in the channel
         if not native_track_info:
@@ -72,20 +75,36 @@ def add_link_to_playlists_from_event(event):
                 user = User.query.filter_by(slack_id=SERVICE_SLACK_ID)
             native_creds = user.credentials_for_service(service=link_service)
             if not native_creds:
-                failure_messages.append(
+                cs_failures.append(
                     "No users have authorized %s in this channel, so cross platform sharing won't work. %s should probably run /authorize <service_name> to fix this" %
                     (link_service.name.title(), user.name)
                 )
 
-                return post_messages_after_link_shared(native_track_info, channel, successful_playlists, failure_messages)
+                return post_messages_after_link_shared(
+                    native_track_info=native_track_info,
+                    cs_track_info=cs_track_info,
+                    channel=channel,
+                    native_successes=native_successes,
+                    native_failures=native_failures,
+                    cs_successes=cs_successes,
+                    cs_failures=cs_failures
+                )
 
             native_service = ServiceBase.from_enum(link_service)(credentials=native_creds)
             native_track_info = native_service.get_track_info_from_link(link)
 
         # still can't get track info? Sucks, bro
         if not native_track_info:
-            failure_messages.append("Couldn't get track info for track... this means cross-platform sharing won't work")
-            return post_messages_after_link_shared(native_track_info, channel, successful_playlists, failure_messages)
+            native_failures.append("Couldn't get track info for track... this means cross-platform sharing won't work")
+            return post_messages_after_link_shared(
+                native_track_info=native_track_info,
+                cs_track_info=cs_track_info,
+                channel=channel,
+                native_successes=native_successes,
+                native_failures=native_failures,
+                cs_successes=cs_successes,
+                cs_failures=cs_failures
+            )
 
         # add to cross_service playlists, using the target service to get track info and add from id after that
         # TODO: there are only 2 services now, so this works. But there may be more in the future
@@ -96,32 +115,64 @@ def add_link_to_playlists_from_event(event):
             cs_track_info = cs_music_service.get_native_track_info_from_track_info(native_track_info)
 
             if not cs_track_info:
-                failure_messages.append('Unable to find %s info for track %s' % (cpl.service.name.title(), native_track_info.get_track_name()))
-                return post_messages_after_link_shared(native_track_info, channel, successful_playlists, failure_messages)
+                cs_failures.append('Unable to find %s info for track %s' % (cpl.service.name.title(), native_track_info.get_track_name()))
+                return post_messages_after_link_shared(
+                    native_track_info=native_track_info,
+                    cs_track_info=cs_track_info,
+                    channel=channel,
+                    native_successes=native_successes,
+                    native_failures=native_failures,
+                    cs_successes=cs_successes,
+                    cs_failures=cs_failures
+                )
 
             success, _, message = cs_music_service.add_track_to_playlist_by_track_id(cpl, cs_track_info.track_id)
 
             if success:
-                successful_playlists.append("%s (%s)" % (cpl.name, cpl.service.name.title()))
+                cs_successes.append("%s (%s)" % (cpl.name, cpl.service.name.title()))
             else:
-                failure_messages.append("%s (%s) - %s" % (cpl.name, cpl.service.name.title(), message))
+                cs_failures.append("%s (%s) - %s" % (cpl.name, cpl.service.name.title(), message))
 
-        post_messages_after_link_shared(native_track_info, channel, successful_playlists, failure_messages)
+        post_messages_after_link_shared(
+            native_track_info=native_track_info,
+            cs_track_info=cs_track_info,
+            channel=channel,
+            native_successes=native_successes,
+            native_failures=native_failures,
+            cs_successes=cs_successes,
+            cs_failures=cs_failures
+        )
 
         return True
 
-def post_messages_after_link_shared(track_info, channel, successful_playlists, failure_messages):
-    title = track_info.get_track_name()
+def post_messages_after_link_shared(native_track_info, channel, cs_track_info=None, native_successes=None, native_failures=None, cs_successes=None, cs_failures=None):
+    native_title = native_track_info.get_track_name()
+
     response_message = ""
-    if not successful_playlists and not failure_messages:
+    if not native_successes and not native_failures and not cs_successes and not cs_failures:
         response_message = "Something done got real fucked up... you should probably talk to @matt"
 
-    if successful_playlists:
-        response_message += "Added *%s* to playlists:\n%s" % (title, "\n".join("*%s*" % pl for pl in successful_playlists))
-    if failure_messages:
-        if successful_playlists:
+    if native_successes:
+        response_message += "Added *%s* to playlists:\n%s" % (native_title, "\n".join("*%s*" % pl for pl in native_successes))
+    if native_failures:
+        if native_successes:
             response_message += "\n"
-        response_message += "Failed to add track to playlists:\n%s" % ("\n".join("*%s*" % msg for msg in failure_messages))
+        response_message += "Failed to add track to playlists:\n%s" % ("\n".join("*%s*" % msg for msg in native_failures))
+
+    if cs_successes:
+        if response_message:
+            response_message += "\n"
+        response_message += "\nAdded *%s* to playlists:\n%s" % (
+            cs_track_info.get_track_name(), "\n".join("*%s*" % pl for pl in cs_successes))
+    if cs_failures:
+        if response_message:
+            response_message += "\n"
+        if cs_track_info:
+            if native_successes or cs_successes and cs_track_info:
+                response_message += "Failed to add track to playlists:\n"
+            response_message += ("\n".join("*%s*" % msg for msg in cs_failures))
+        else:
+            response_message += cs_failures[0]
 
     post_update_to_chat(
         payload={
