@@ -488,7 +488,7 @@ class Spotify(ServiceBase):
         return self.get_track_info(track_id=self.get_track_id(link))
 
     def prep_track_name_for_search(self, title):
-        new_title = re.sub(r"[&'_-]", "", title)
+        new_title = re.sub(r"[|&'_-]", "", title)
         new_title = re.sub(r'\([^)]*\)', '', new_title)
         new_title = re.sub(r'\[[^]]*\]', '', new_title)
 
@@ -506,11 +506,17 @@ class Spotify(ServiceBase):
             'limit': 10
         }
         search_kwargs.update(kwargs)
-        return service.search(q=self.prep_track_name_for_search(search_string), **search_kwargs)
+        try:
+            return service.search(q=self.prep_track_name_for_search(search_string), **search_kwargs)
+        except SpotifyException:
+            return None
+
 
     def get_native_track_info_from_track_info(self, track_info):
         results = self.search(search_string=track_info.get_track_name())
 
+        if not results:
+            return None
         if not results['tracks']:
             return None
         if not results['tracks']['items']:
