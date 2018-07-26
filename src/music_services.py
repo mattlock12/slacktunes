@@ -240,11 +240,19 @@ class Youtube(ServiceBase):
         return True, pl_snippet
 
     @credentials_required
-    def list_tracks_in_playlist(self, playlist):
+    def list_tracks_in_playlist(self, playlist, track_id=None):
         service = self.get_wrapped_service()
 
+        list_kwargs = {
+            'part': 'snippet',
+            'playlistId': playlist.service_id,
+            'maxResults': 50
+        }
+        if track_id:
+            list_kwargs['videoId'] = track_id
+
         tracks = []
-        playlist_items_list_request = service.playlistItems().list(part='snippet', playlistId=playlist.service_id, maxResults=50)
+        playlist_items_list_request = service.playlistItems().list(**list_kwargs)
         while playlist_items_list_request:
             playlist_items_list_response = playlist_items_list_request.execute()
             tracks += [
@@ -263,14 +271,15 @@ class Youtube(ServiceBase):
     def add_track_to_playlist_by_track_id(self, playlist, track_id):
         service = self.get_wrapped_service()
 
-        existing_tracks = self.tracks_in_playlist.get(playlist.service_id, [])
-        if not existing_tracks:
-            existing_tracks = self.tracks_in_playlist[playlist.service_id] = self.list_tracks_in_playlist(playlist)
+        # optimization for multiple adds
+        cached_tracks = self.tracks_in_playlist.get(playlist.service_id)
+        if cached_tracks and track_id in set(ct.track_id for ct in cached_tracks):
+            return False, [t for t in cached_tracks if t.track_id == track_id][0], "Already in playlist"
 
-        existing_track_ids = set(t.track_id for t in existing_tracks)
-
-        if track_id in existing_track_ids:
-            return False, [et for et in existing_tracks if et.track_id == track_id][0], "Already in playlist"
+        # check the api, the ultimate source of truth
+        existing_tracks = self.list_tracks_in_playlist(playlist=playlist, track_id=track_id)
+        if existing_tracks:
+            return False, existing_tracks[0], "Already in playlist"
 
         resource_body = {
             'kind': 'youtube#playlistItem',
@@ -286,12 +295,18 @@ class Youtube(ServiceBase):
         # let exceptions bubble up
         resp = service.playlistItems().insert(part='snippet', body=resource_body).execute()
         track_info = TrackInfo(track_id=track_id, name=resp['snippet']['title'])
-        self.tracks_in_playlist[playlist.service_id].append(track_info)
 
         return True, track_info, ''
 
+    @credentials_required
     def add_links_to_playlist(self, playlist, links):
         return_messages = []
+
+        # let's say a large playlist is ~1000 songs; get a list of all tracks in playlist if it'll take more than
+        # 10 individual calls to get a list of all track_ids
+        if len(links) > 10:
+            self.tracks_in_playlist[playlist.service_id] = self.list_tracks_in_playlist(playlist=playlist)
+
         for link in links:
             if 'yout' in link:
                 return_messages.append(self.add_link_to_playlist(playlist, link))
