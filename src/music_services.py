@@ -508,7 +508,7 @@ class Spotify(ServiceBase):
         new_title = re.sub(r'\[[^]]*\]', '', new_title)
 
         for word in BAD_WORDS:
-            replacer = re.compile(word, re.IGNORECASE)
+            replacer = re.compile("\\b%s\\b" % word, re.IGNORECASE)
             new_title = replacer.sub('', new_title)
         return new_title
 
