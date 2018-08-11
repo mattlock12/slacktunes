@@ -1,7 +1,9 @@
 import logging
+from logging.handlers import RotatingFileHandler
 
 from app import application
 from src.views import *
+
 
 if __name__ == '__main__':
     logger = logging.getLogger(__name__)

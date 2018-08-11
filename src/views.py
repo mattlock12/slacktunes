@@ -1,5 +1,5 @@
+import collections
 import json
-from logging.handlers import RotatingFileHandler
 from threading import Thread
 
 import requests
@@ -13,7 +13,7 @@ from app import application
 from .constants import InvalidEnumException, MusicService, SlackUrl
 from .models import Credential, Playlist, User
 from .music_services import ServiceBase
-from .utils import get_links, post_update_to_chat, add_link_to_playlists_from_event
+from .utils import add_to_playlists_manually, get_links, post_update_to_chat, add_link_to_playlists_from_event
 
 
 # UTILITY DECORATOR
@@ -292,6 +292,38 @@ def delete_playlist():
            " Keep in mind, this won't delete the %s version, it'll only stop slacktunes" \
            "from posting links to it" % (playlist_name, channel_name, service.name.title()), 200
 
+
+@application.route("/add_track/", methods=["POST"])
+@verified_slack_request
+def add_track():
+    if request.form.get('channel_name') == 'directmessage':
+        return "Can't /add_track from private channel", 200
+
+    channel_id = request.form['channel_id']
+    artist = None
+    track_name = None
+    playlist_name = None
+    command_text_args = request.form['text'].split('-')
+
+    if len(command_text_args) < 2:
+        return "/add_track uses the following arguments: /add_track <artist> <track> <playlist(optional)>", 200
+
+    artist, track_name = command_text_args[0], command_text_args[1]
+    if len(command_text_args) > 2:
+        playlist_name = command_text_args[2]
+
+    # start thread to do this because slack requires a fast response and checking for dupes takes time
+    t = Thread(
+        target=add_to_playlists_manually,
+        kwargs={
+            'channel_id': channel_id,
+            'artist': artist,
+            'track_name': track_name,
+            'playlist_name': playlist_name
+        })
+    t.start()
+
+    return "", 200
 
 # handles incoming event hooks
 @application.route("/slack_events/", methods=['POST'])

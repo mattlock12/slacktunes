@@ -41,3 +41,7 @@ class MusicService(Enum):
 
 
 BAD_WORDS = ['EP', 'Full', 'Official', 'Lyrics', 'Lyric', 'Video', 'Album', 'HD', 'SD', 'HQ', 'by', 'single', 'version']
+
+CS_SEARCH_FAIL_TEMPLATE = 'Unable to find %s info for track %s'
+ADD_SUCCESS_TEMPLATE = "%s (%s)"
+ADD_FAIL_TEMPLATE = "%s (%s) - %s"
