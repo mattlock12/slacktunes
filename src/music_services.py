@@ -11,7 +11,8 @@ from spotipy.client import SpotifyException
 
 from settings import YOUTUBE_CLIENT_ID, YOUTUBE_CLIENT_SECRET, YOUTUBE_REDIRECT_URI, SPOTIFY_CLIENT_ID, SPOTIFY_CLIENT_SECRET, SPOTIFY_REDIRECT_URI
 
-from .constants import BAD_WORDS, InvalidEnumException, MusicService
+from .constants import (
+    ADD_FAIL_TEMPLATE, ADD_SUCCESS_TEMPLATE, BAD_WORDS, CS_SEARCH_FAIL_TEMPLATE, InvalidEnumException, MusicService)
 from .oauth_wrappers import SpotipyClientCredentialsManager, SpotipyDBWrapper
 
 
@@ -23,7 +24,7 @@ class TrackInfo(object):
 
     def get_track_name(self):
         if self.artist:
-            return "%s - %s" % (self.name, self.artist)
+            return ("%s - %s" % (self.artist, self.name)).strip()
 
         return self.name
 
@@ -115,6 +116,25 @@ class ServiceBase(object):
         return self.add_track_to_playlist_by_track_id(playlist=playlist, track_id=track_id)
 
     @credentials_required
+    def add_links_to_playlist(self, playlist, links):
+        tracks_added = 0
+        tracks_failed = 0
+        native_info = None
+        cs_info = None
+
+        same_service_infos = []
+        for link in links:
+            if MusicService.from_link(link) is self.service:
+                native_info, n_success, n_failure = self.add_link_to_playlist(playlist=playlist, link=link)
+                same_service_infos.append(native_info)
+                if n_success:
+                    tracks_added += 1
+                if n_failure:
+                    tracks_failed += 1
+            else:
+                pass
+
+    @credentials_required
     def get_track_info_from_link(self, link):
         raise NotImplementedError
 
@@ -129,6 +149,15 @@ class ServiceBase(object):
     @credentials_required
     def search(self, search_string, *args, **kwargs):
         raise NotImplementedError
+
+    @credentials_required
+    def add_cross_service_track_to_playlist(self, playlist, track_info):
+        native_info = self.get_native_track_info_from_track_info(track_info=track_info)
+
+        if not native_info:
+            return False, None, CS_SEARCH_FAIL_TEMPLATE % (playlist.service.name.title(), track_info.get_track_name())
+
+        return self.add_track_to_playlist_by_track_id(native_info.track_id)
 
 
 class Youtube(ServiceBase):
@@ -274,12 +303,20 @@ class Youtube(ServiceBase):
         # optimization for multiple adds
         cached_tracks = self.tracks_in_playlist.get(playlist.service_id)
         if cached_tracks and track_id in set(ct.track_id for ct in cached_tracks):
-            return False, [t for t in cached_tracks if t.track_id == track_id][0], "Already in playlist"
+            return (
+                False,
+                [t for t in cached_tracks if t.track_id == track_id][0],
+                ADD_FAIL_TEMPLATE % (playlist.name, playlist.service.title(), "Already in playlist")
+            )
 
         # check the api, the ultimate source of truth
         existing_tracks = self.list_tracks_in_playlist(playlist=playlist, track_id=track_id)
         if existing_tracks:
-            return False, existing_tracks[0], "Already in playlist"
+            return (
+                False,
+                existing_tracks[0],
+                ADD_FAIL_TEMPLATE % (playlist.name, playlist.service.name.title(), "Already in playlist")
+            )
 
         resource_body = {
             'kind': 'youtube#playlistItem',
@@ -296,7 +333,7 @@ class Youtube(ServiceBase):
         resp = service.playlistItems().insert(part='snippet', body=resource_body).execute()
         track_info = TrackInfo(track_id=track_id, name=resp['snippet']['title'])
 
-        return True, track_info, ''
+        return True, track_info, ADD_SUCCESS_TEMPLATE % (playlist.name, playlist.service.name.title())
 
     @credentials_required
     def add_links_to_playlist(self, playlist, links):
@@ -510,6 +547,10 @@ class Spotify(ServiceBase):
         for word in BAD_WORDS:
             replacer = re.compile("\\b%s\\b" % word, re.IGNORECASE)
             new_title = replacer.sub('', new_title)
+
+        new_title = new_title.strip()
+        new_title = re.sub(r'\s{2,}', ' ', new_title)
+        
         return new_title
 
     @credentials_required
@@ -566,35 +607,50 @@ class Spotify(ServiceBase):
 
         existing_track_ids = set(t.track_id for t in existing_tracks)
         if track_id in existing_track_ids:
-            return False, [et for et in existing_tracks if et.track_id == track_id][0], "Already in playlist"
+            return (
+                False,
+                [et for et in existing_tracks if et.track_id == track_id][0],
+                ADD_FAIL_TEMPLATE % (playlist.name, playlist.service.name.title(), "Already in playlist")
+            )
 
         try:
             resp = service.user_playlist_add_tracks(user=self.get_user_info_from_spotify()['id'],
                                                     playlist_id=playlist.service_id,
                                                     tracks=[track_id])
         except SpotifyException as e:
-            return False, None, e
+            return (
+                False,
+                None,
+                ADD_FAIL_TEMPLATE % (playlist.name, playlist.service.name.title(), e)
+            )
 
         track_info = self.get_track_info(track_id=track_id)
         if not resp['snapshot_id']:
-            return False, None, "Unable to add %s to %s" % (track_info['name'], playlist.name)
+            return (
+                False,
+                None,
+                ADD_FAIL_TEMPLATE % (
+                    playlist.name,
+                    playlist.service.name.title(),
+                    "Unable to add %s" % track_info['name']
+                )
+            )
 
         self.tracks_in_playlist[playlist.service_id].append(track_info)
 
-        return True, track_info, ''
+        return True, track_info, ADD_SUCCESS_TEMPLATE % (playlist.name, playlist.service.name.title())
 
     @credentials_required
     def add_links_to_playlist(self, playlist, links):
-        return_messages = []
-
+        messages = []
         for link in links:
             if 'spotify' in link:
-                return_messages.append(self.add_link_to_playlist(playlist=playlist, link=link))
+                messages.append(self.add_link_to_playlist(playlist=playlist, link=link))
             else:
                 # TODO
                 continue
 
-        return return_messages
+        return messages
 
 
 class GMusic(ServiceBase):
