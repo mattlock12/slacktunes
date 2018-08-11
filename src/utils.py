@@ -81,7 +81,7 @@ def add_track_to_cross_service_playlists(playlists, track_info):
     return cs_track_info, successes, failures
 
 
-def add_to_playlists_manually(channel_id, artist, track_name, playlist_name=None):
+def add_to_playlists_manually(channel_id, artist, track_name, playlist_name=None, for_service=None):
     with application.app_context():
         playlists = Playlist.query.filter_by(channel_id=channel_id)
         if not playlists:
@@ -93,12 +93,20 @@ def add_to_playlists_manually(channel_id, artist, track_name, playlist_name=None
 
         if playlist_name:
             playlists = [pl for pl in playlists if pl.name == playlist_name]
-            if not playlists:
-                post_update_to_chat({
-                    "text": "No playlist found in this channel with name %s" % playlist_name,
-                    "channel": channel_id
-                })
-                return
+
+            if for_service:
+                playlists = [pl for pl in playlists if pl.service is for_service]
+
+                if not playlists:
+                    resp_message = "No playlist found in this channel with name %s" % playlist_name
+                    if for_service:
+                        resp_message += " (%s)" % for_service.name.title()
+
+                    post_update_to_chat({
+                        "text": resp_message,
+                        "channel": channel_id
+                    })
+                    return
 
         successes = set()
         failures = set()

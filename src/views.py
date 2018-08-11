@@ -303,6 +303,7 @@ def add_track():
     artist = None
     track_name = None
     playlist_name = None
+    service_enum = None
     command_text_args = request.form['text'].split('-')
 
     if len(command_text_args) < 2:
@@ -312,6 +313,9 @@ def add_track():
     if len(command_text_args) > 2:
         playlist_name = command_text_args[2].strip()
 
+    if len(command_text_args) > 3:
+        service_enum = MusicService.from_string(command_text_args[3].strip())
+
     # start thread to do this because slack requires a fast response and checking for dupes takes time
     t = Thread(
         target=add_to_playlists_manually,
@@ -319,7 +323,8 @@ def add_track():
             'channel_id': channel_id,
             'artist': artist,
             'track_name': track_name,
-            'playlist_name': playlist_name
+            'playlist_name': playlist_name,
+            'for_service': service_enum
         })
     t.start()
 

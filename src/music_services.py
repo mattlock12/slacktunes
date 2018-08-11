@@ -117,22 +117,7 @@ class ServiceBase(object):
 
     @credentials_required
     def add_links_to_playlist(self, playlist, links):
-        tracks_added = 0
-        tracks_failed = 0
-        native_info = None
-        cs_info = None
-
-        same_service_infos = []
-        for link in links:
-            if MusicService.from_link(link) is self.service:
-                native_info, n_success, n_failure = self.add_link_to_playlist(playlist=playlist, link=link)
-                same_service_infos.append(native_info)
-                if n_success:
-                    tracks_added += 1
-                if n_failure:
-                    tracks_failed += 1
-            else:
-                pass
+        raise NotImplementedError
 
     @credentials_required
     def get_track_info_from_link(self, link):
@@ -149,15 +134,6 @@ class ServiceBase(object):
     @credentials_required
     def search(self, search_string, *args, **kwargs):
         raise NotImplementedError
-
-    @credentials_required
-    def add_cross_service_track_to_playlist(self, playlist, track_info):
-        native_info = self.get_native_track_info_from_track_info(track_info=track_info)
-
-        if not native_info:
-            return False, None, CS_SEARCH_FAIL_TEMPLATE % (playlist.service.name.title(), track_info.get_track_name())
-
-        return self.add_track_to_playlist_by_track_id(native_info.track_id)
 
 
 class Youtube(ServiceBase):
