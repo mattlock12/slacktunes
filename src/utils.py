@@ -85,18 +85,20 @@ def add_to_playlists_manually(channel_id, artist, track_name, playlist_name=None
     with application.app_context():
         playlists = Playlist.query.filter_by(channel_id=channel_id)
         if not playlists:
-            return post_update_to_chat({
+            post_update_to_chat({
                 'text': "No playlists in this channel. Use */create_playlist playlist_name service* to create one",
-                'channel_id': channel_id
+                'channel': channel_id
             })
+            return
 
         if playlist_name:
             playlists = [pl for pl in playlists if pl.name == playlist_name]
             if not playlists:
-                return post_update_to_chat({
+                post_update_to_chat({
                     "text": "No playlist found in this channel with name %s" % playlist_name,
-                    "channel_id": channel_id
+                    "channel": channel_id
                 })
+                return
 
         successes = set()
         failures = set()

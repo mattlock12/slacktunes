@@ -308,9 +308,9 @@ def add_track():
     if len(command_text_args) < 2:
         return "/add_track uses the following arguments: /add_track <artist> <track> <playlist(optional)>", 200
 
-    artist, track_name = command_text_args[0], command_text_args[1]
+    artist, track_name = command_text_args[0].strip(), command_text_args[1].strip()
     if len(command_text_args) > 2:
-        playlist_name = command_text_args[2]
+        playlist_name = command_text_args[2].strip()
 
     # start thread to do this because slack requires a fast response and checking for dupes takes time
     t = Thread(
