@@ -18,13 +18,13 @@ DB_URI = 'sqlite:////tmp/test.db'
 
 To create the initial test db:
 ```
-from application import db
+from app import db
 db.create_all()
 ```
 
 To run the app:
 ```
-python run_app.py
+python application.py
 ```
 
 #### Using ngrok

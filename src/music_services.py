@@ -2,7 +2,7 @@ import json
 import httplib2
 import re
 from functools import wraps
-from fuzzywuzzy import fuzz, process
+from fuzzywuzzy import fuzz
 
 from apiclient.discovery import build
 from oauth2client.client import OAuth2WebServerFlow
@@ -16,16 +16,39 @@ from .oauth_wrappers import SpotipyClientCredentialsManager, SpotipyDBWrapper
 
 
 class TrackInfo(object):
-    def __init__(self, name, artist=None, track_id=None):
+    def __init__(self, name, raw_json=None, artists=None, track_id=None):
         self.name = name
-        self.artist = artist
+        self.raw_json = raw_json  # NOTE: for youtube responses, this means raw['snippet']
+        self.artists = artists
         self.track_id = track_id
 
-    def get_track_name(self):
-        if self.artist:
-            return "%s - %s" % (self.name, self.artist)
+    def artists_display_name(self):
+        if self.artists:
+            return ", ".join(self.artists)
+
+        return None
+
+    def track_name_for_comparison(self):
+        if self.artists:
+            return "%s %s" % (self.name, " ".join(self.artists))
 
         return self.name
+
+    def get_track_name(self):
+        if self.artists:
+            return "%s - %s" % (self.name, self.artists_display_name())
+
+        return self.name
+
+    def sanitized_track_name(self):
+        new_title = re.sub(r"[|&'_-]", "", self.name)
+        new_title = re.sub(r'\([^)]*\)', '', new_title)
+        new_title = re.sub(r'\[[^]]*\]', '', new_title)
+
+        for word in BAD_WORDS:
+            replacer = re.compile("\\b%s\\b" % word, re.IGNORECASE)
+            new_title = replacer.sub('', new_title)
+        return new_title
 
 
 class NoCredentialsError(Exception):
@@ -294,7 +317,7 @@ class Youtube(ServiceBase):
 
         # let exceptions bubble up
         resp = service.playlistItems().insert(part='snippet', body=resource_body).execute()
-        track_info = TrackInfo(track_id=track_id, name=resp['snippet']['title'])
+        track_info = TrackInfo(raw_json=resp['snippet'], track_id=track_id, name=resp['snippet']['title'])
 
         return True, track_info, ''
 
@@ -332,7 +355,8 @@ class Youtube(ServiceBase):
         if not results['items'][0].get('snippet', {}).get('title'):
             return None
 
-        return TrackInfo(name=results['items'][0]['snippet']['title'], track_id=track_id)
+        return TrackInfo(
+            raw_json=results['items'][0]['snippet'], name=results['items'][0]['snippet']['title'], track_id=track_id)
 
     @credentials_required
     def search(self, search_string, **kwargs):
@@ -356,14 +380,17 @@ class Youtube(ServiceBase):
 
         best_result = (None, 0)
         for item in items:
-            contender = fuzz.token_sort_ratio(track_info.get_track_name(), item['snippet']['title'])
-            if contender > best_result[1] and contender > 50:
+            contender = fuzz.token_set_ratio(track_info.get_track_name(), item['snippet']['title'])
+            if contender > best_result[1] and contender > 85:
                 best_result = (item, contender)
 
         if not best_result[0]:
             return None
 
-        return TrackInfo(name=best_result[0]['snippet']['title'], track_id=best_result[0]['id']['videoId'])
+        return TrackInfo(
+            raw_json=best_result[0]['snippet'],
+            name=best_result[0]['snippet']['title'],
+            track_id=best_result[0]['id']['videoId'])
 
 
 class Spotify(ServiceBase):
@@ -440,9 +467,10 @@ class Spotify(ServiceBase):
         self.track_info[track_id] = track_info
 
         return TrackInfo(
+            raw_json=track_info,
             track_id=track_id,
             name=track_info['name'],
-            artist=", ".join(a['name'] for a in track_info['artists'])
+            artists=[a['name'] for a in track_info['artists']]
         )
 
     @credentials_required
@@ -488,9 +516,10 @@ class Spotify(ServiceBase):
         while tracks_request:
             tracks += [
                 TrackInfo(
+                    raw_json=t,
                     track_id=t['track']['id'],
                     name=t['track']['name'],
-                    artist=", ".join(a['name'] for a in t['track']['artists'])
+                    artists=[a['name'] for a in t['track']['artists']]
                 )
                 for t in tracks_request['items']
             ]
@@ -502,16 +531,6 @@ class Spotify(ServiceBase):
     def get_track_info_from_link(self, link):
         return self.get_track_info(track_id=self.get_track_id(link))
 
-    def prep_track_name_for_search(self, title):
-        new_title = re.sub(r"[|&'_-]", "", title)
-        new_title = re.sub(r'\([^)]*\)', '', new_title)
-        new_title = re.sub(r'\[[^]]*\]', '', new_title)
-
-        for word in BAD_WORDS:
-            replacer = re.compile("\\b%s\\b" % word, re.IGNORECASE)
-            new_title = replacer.sub('', new_title)
-        return new_title
-
     @credentials_required
     def search(self, search_string, **kwargs):
         service = self.get_wrapped_service()
@@ -522,13 +541,13 @@ class Spotify(ServiceBase):
         }
         search_kwargs.update(kwargs)
         try:
-            return service.search(q=self.prep_track_name_for_search(search_string), **search_kwargs)
+            return service.search(q=search_string, **search_kwargs)
         except SpotifyException:
             return None
 
 
     def get_native_track_info_from_track_info(self, track_info):
-        results = self.search(search_string=track_info.get_track_name())
+        results = self.search(search_string=track_info.sanitized_track_name())
 
         if not results:
             return None
@@ -539,21 +558,59 @@ class Spotify(ServiceBase):
 
         items = results['tracks']['items']
 
-        best_result = (None, 0)
+        best_score_so_far = 0
+        contenders = []
+        target = track_info.track_name_for_comparison()
         for item in items:
             contender_name = item['name']
             contender_artist = " ".join(a['name'] for a in item['artists'])
-            contender = fuzz.token_sort_ratio(track_info.get_track_name(), "%s %s" % (contender_name, contender_artist))
-            if contender > best_result[1] and contender > 50:
-                best_result = (item, contender)
+            contender = fuzz.token_set_ratio(target, "%s %s" % (contender_name, contender_artist))
+            if contender >= best_score_so_far and contender > 75:
+                contenders.append(item)
 
-        if not best_result[0]:
+        if not contenders:
             return None
 
+        # this is the case where there is 1 clear winner
+        if len(contenders) == 1:
+            winner = contenders[0]
+            return TrackInfo(
+                raw_json=winner,
+                name=winner['name'],
+                artists=[a['name'] for a in winner['artists']],
+                track_id=winner['id']
+            )
+
+        # this is the case where there are multiple possibilities and we have to get craftier
+        # a contender is a spotify api response, track_info is a youtube TrackInfo object
+        best_results_with_artist = []
+        best_score_so_far_with_artist = 0
+        original_description = track_info.raw_json['description'].lower()
+        for contender in contenders:
+            """
+            if we're here, it means the artists from the spotify res contender string didn't help differentiate
+            To decide:
+            1. see if we can find the artist(s) name(s) in the description of the video; add +10 points for each find
+            2. if there's still a tie, take the most popular one
+            """
+            current_score = 0
+            for a in contender['artists']:
+                if a['name'].lower() in original_description:
+                    current_score += 10
+
+                if a['name'].lower() in track_info.raw_json['channelTitle']:
+                    current_score += 25
+
+            if current_score > 0 and current_score >= best_score_so_far_with_artist:
+                best_results_with_artist.append(contender)
+
+        winner = max(best_results_with_artist, key=lambda b: b['popularity'])
+
         return TrackInfo(
-            name=best_result[0]['name'],
-            artist=", ".join(a['name'] for a in best_result[0]['artists']),
-            track_id=best_result[0]['id']
+            raw_json=winner,
+            name=winner['name'],
+            artists=[a['name'] for a in winner['artists']],
+            track_id=winner['id']
         )
 
     @credentials_required
