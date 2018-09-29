@@ -604,6 +604,9 @@ class Spotify(ServiceBase):
             if current_score > 0 and current_score >= best_score_so_far_with_artist:
                 best_results_with_artist.append(contender)
 
+        if not best_results_with_artist:
+            return None
+
         winner = max(best_results_with_artist, key=lambda b: b['popularity'])
 
         return TrackInfo(
