@@ -24,13 +24,25 @@ class TrackInfo(object):
 
     def artists_display_name(self):
         if self.artists:
-            return ", ".join(self.artists)
+            if isinstance(self.artists, list):
+                return ", ".join(self.artists)
+            else:
+                return ", ".join(self.artists.split(' '))
 
         return None
 
+    def artists_for_search(self):
+        if not self.artists:
+            return ''
+
+        if isinstance(self.artists, list):
+            return " ".join(self.artists)
+
+        return self.artists
+
     def track_name_for_comparison(self):
         if self.artists:
-            return "%s %s" % (self.name, " ".join(self.artists))
+            return ("%s %s" % (self.name, self.artists_for_search())).strip()
 
         return self.name
 
@@ -39,6 +51,18 @@ class TrackInfo(object):
             return "%s - %s" % (self.name, self.artists_display_name())
 
         return self.name
+
+    def description(self):
+        if self.raw_json:
+            return self.raw_json.get('description', '')
+
+        return ''
+
+    def channel_title(self):
+        if self.raw_json:
+            self.raw_json.get('channelTitle', '')
+
+        return ''
 
     def sanitized_track_name(self):
         new_title = re.sub(r"[|&'_-]", "", self.name)
@@ -146,12 +170,23 @@ class ServiceBase(object):
         raise NotImplementedError
 
     @credentials_required
-    def get_native_track_info_from_track_info(self, track_info):
+    def get_native_track_info_from_track_info(self, track_info, is_spotify=False):
         raise NotImplementedError
 
     @credentials_required
     def search(self, search_string, *args, **kwargs):
         raise NotImplementedError
+
+    @credentials_required
+    def add_manual_track_to_playlist(self, playlist, track_name, artist):
+        ti = TrackInfo(name=track_name, artists=artist)
+        native_track_info = self.get_native_track_info_from_track_info(
+            track_info=ti,
+            is_spotify=playlist.service == MusicService.SPOTIFY
+        )
+        if not native_track_info:
+            return False, None, 'No track info found'
+        return self.add_track_to_playlist_by_track_id(track_id=native_track_info.track_id, playlist=playlist)
 
 
 class Youtube(ServiceBase):
@@ -369,7 +404,7 @@ class Youtube(ServiceBase):
         search_kwargs.update(kwargs)
         return service.search().list(q=search_string, **search_kwargs).execute()
 
-    def get_native_track_info_from_track_info(self, track_info):
+    def get_native_track_info_from_track_info(self, track_info, is_spotify=False):
         results = self.search(search_string=track_info.get_track_name())
         if not results['items']:
             return None
@@ -537,18 +572,20 @@ class Spotify(ServiceBase):
         search_kwargs = {
             'market': 'US',
             'type': 'track',
-            'limit': 10
+            'limit': 50
         }
         search_kwargs.update(kwargs)
         try:
             return service.search(q=search_string, **search_kwargs)
-        except SpotifyException:
+        except SpotifyException as ssss:
             return None
 
+    def get_native_track_info_from_track_info(self, track_info, is_spotify=False):
+        search_str = "track:%s" % track_info.sanitized_track_name()
+        if is_spotify:
+            search_str += " artist:%s" % track_info.artists_for_search()
 
-    def get_native_track_info_from_track_info(self, track_info):
-        results = self.search(search_string=track_info.sanitized_track_name())
-
+        results = self.search(search_string=search_str)
         if not results:
             return None
         if not results['tracks']:
@@ -561,17 +598,24 @@ class Spotify(ServiceBase):
         best_score_so_far = 0
         contenders = []
         target = track_info.track_name_for_comparison()
+        # TODO: break this out and do token sort after this
+        """
+        STAGE 1: a token_set_ratio
+        
+        Check if the given name and artist combo at least form a set of the results
+        """
         for item in items:
             contender_name = item['name']
             contender_artist = " ".join(a['name'] for a in item['artists'])
-            contender = fuzz.token_set_ratio(target, "%s %s" % (contender_name, contender_artist))
+            # using set
+            contender = fuzz.token_set_ratio(target.lower(), ("%s %s" % (contender_name, contender_artist)).lower())
             if contender >= best_score_so_far and contender > 75:
+                best_score_so_far = contender
                 contenders.append(item)
 
         if not contenders:
             return None
 
-        # this is the case where there is 1 clear winner
         if len(contenders) == 1:
             winner = contenders[0]
             return TrackInfo(
@@ -581,11 +625,52 @@ class Spotify(ServiceBase):
                 track_id=winner['id']
             )
 
-        # this is the case where there are multiple possibilities and we have to get craftier
-        # a contender is a spotify api response, track_info is a youtube TrackInfo object
+        """
+        STAGE 2: token_sort_ratio
+        
+        If multiple contenders pass the token_set_ratio criteria, try a token_sort_ratio.
+        How many transformations are necessary to change the source string to the target string?
+        """
+        best_sort_score_so_far = 0
+        sort_contenders = []
+        for contender in contenders:
+            contender_name = contender['name']
+            contender_artist = " ".join(a['name'] for a in contender['artists'])
+            # using sort
+            sort_score = fuzz.token_sort_ratio(
+                target.lower(), ("%s %s" % (contender_name, contender_artist)).lower())
+            if sort_score >= best_sort_score_so_far and sort_score > 65:
+                contender['sort_score'] = sort_score
+                best_sort_score_so_far = sort_score
+                sort_contenders.append(contender)
+
+        if is_spotify:
+            highest_sort_score = max(sort_contenders, key=lambda b: b['sort_score'])['sort_score']
+            best_contenders = [c for c in sort_contenders if c['sort_score'] >= highest_sort_score]
+
+            if len(contenders) == 1:
+                winner = best_contenders[0]
+            else:
+                winner = max(contenders, key=lambda c: c['popularity'])
+                return TrackInfo(
+                    raw_json=winner,
+                    name=winner['name'],
+                    artists=[a['name'] for a in winner['artists']],
+                    track_id=winner['id']
+                )
+
+        """
+        STAGE 3:
+        
+        Multiple contenders have passed the token_sort_score check. And the source was a Youtube track
+            
+        We have to get craftier, 
+        A contender is a spotify api response, track_info is a youtube TrackInfo object
+        Check the channelTitle and description for mentions of the artist name
+        """
         best_results_with_artist = []
         best_score_so_far_with_artist = 0
-        original_description = track_info.raw_json['description'].lower()
+        original_description = track_info.description().lower()
         for contender in contenders:
             """
             if we're here, it means the artists from the spotify res contender string didn't help differentiate
@@ -598,16 +683,22 @@ class Spotify(ServiceBase):
                 if a['name'].lower() in original_description:
                     current_score += 10
 
-                if a['name'].lower() in track_info.raw_json['channelTitle']:
+                if a['name'].lower() in track_info.channel_title().lower():
                     current_score += 25
 
             if current_score > 0 and current_score >= best_score_so_far_with_artist:
+                contender['with_artist_score'] = current_score
                 best_results_with_artist.append(contender)
 
-        if not best_results_with_artist:
-            return None
-
-        winner = max(best_results_with_artist, key=lambda b: b['popularity'])
+        if best_results_with_artist:
+            highest_best_result_with_artist_score = max(
+                best_results_with_artist, key=lambda b: b['with_artist_score'])['with_artist_score']
+            winner = max([
+                c for c in best_results_with_artist if c['with_artist_score'] >= highest_best_result_with_artist_score],
+                key=lambda bra: bra['popularity']
+            )
+        else:
+            winner = max(contenders, key=lambda c: c['popularity'])
 
         return TrackInfo(
             raw_json=winner,

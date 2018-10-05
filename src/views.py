@@ -12,8 +12,8 @@ from settings import BASE_URI, SLACK_CLIENT_ID, SLACK_CLIENT_SECRET, SLACK_OAUTH
 from app import application
 from .constants import InvalidEnumException, MusicService, SlackUrl
 from .models import Credential, Playlist, User
-from .music_services import ServiceBase
-from .utils import get_links, post_update_to_chat, add_link_to_playlists_from_event
+from .music_services import ServiceBase, TrackInfo
+from .utils import get_links, post_update_to_chat, add_link_to_playlists_from_event, add_manual_track_to_playlists
 
 
 # UTILITY DECORATOR
@@ -291,6 +291,46 @@ def delete_playlist():
     return "Deleted slacktunes record of *%s* in channel *%s* \n" \
            " Keep in mind, this won't delete the %s version, it'll only stop slacktunes" \
            "from posting links to it" % (playlist_name, channel_name, service.name.title()), 200
+
+
+@application.route("/add_track/", methods=['POST'])
+@verified_slack_request
+def add_track():
+    """
+    /add_track track_name | artist | playlist(optional) | service(optional)
+    """
+    if request.form.get('channel_name') == 'directmessage':
+        return "Can't init playlist from private channel", 200
+
+    channel_id = request.form['channel_id']
+    command_text_args = request.form['text'].split('|')
+
+    if not command_text_args or len(command_text_args) < 2 or len(command_text_args) > 4:
+        return "Usage: /add_track <track_name> | <artist> | <playlist_name [optional> | <service [optional>", 200
+
+    track_name = command_text_args.pop(0).strip()
+    artist = command_text_args.pop(0).strip()
+    playlist_name = None
+    service_str = None
+
+    if command_text_args:
+        playlist_name = command_text_args.pop(0).strip()
+
+    if command_text_args:
+        service_str = command_text_args.pop(0).strip()
+
+    # start thread to do this because slack requires a fast response and checking for dupes takes time
+    t = Thread(
+        target=add_manual_track_to_playlists,
+        kwargs={
+            'track_info': TrackInfo(name=track_name, artists=artist),
+            'channel_id': channel_id,
+            'playlist_name': playlist_name,
+            'service_str': service_str
+        })
+    t.start()
+
+    return '', 200
 
 
 # handles incoming event hooks

@@ -25,6 +25,50 @@ def post_update_to_chat(payload):
     return res.text, res.status_code
 
 
+def add_manual_track_to_playlists(track_info, channel_id, playlist_name=None, service_str=None):
+    with application.app_context():
+        playlists = Playlist.query.filter_by(channel_id=channel_id)
+
+        if not playlists:
+            return "No playlists in channel! Try /create_playlist", 200
+
+        if playlist_name:
+            playlists = playlists.filter_by(name=playlist_name)
+
+        if service_str:
+            playlists = playlists.filter_by(service=MusicService.from_string(service_str))
+
+        if not playlists:
+            return "No %splaylists found with name %s" % (
+                "%s " % MusicService.from_string(service_str).name.lower() if service_str else '',
+                playlist_name
+            ), 200
+
+        successes = []
+        failures = []
+        for pl in playlists:
+            success, ti, error_msg = ServiceBase.from_enum(pl.service)(
+                credentials=pl.user.credentials_for_service(pl.service)).add_manual_track_to_playlist(
+                playlist=pl,
+                track_name=track_info.name,
+                artist=track_info.artists)
+
+            if success:
+                track_info = ti
+                successes.append("%s (%s)" % (pl.name, pl.service.name.title()))
+            else:
+                failures.append("%s (%s) - %s" % (pl.name, pl.service.name.title(), error_msg))
+
+        post_messages_after_link_shared(
+            native_track_info=track_info,
+            native_successes=successes,
+            native_failures=failures,
+            channel=channel_id
+        )
+
+        return True
+
+
 def add_link_to_playlists_from_event(event):
     with application.app_context():
         channel = event.get('channel')
@@ -76,7 +120,9 @@ def add_link_to_playlists_from_event(event):
             native_creds = user.credentials_for_service(service=link_service)
             if not native_creds:
                 cs_failures.append(
-                    "No users have authorized %s in this channel, so cross platform sharing won't work. %s should probably run /authorize <service_name> to fix this" %
+                    "No users have authorized %s in this channel, "
+                    "so cross platform sharing won't work."
+                    " %s should probably run /authorize <service_name> to fix this" %
                     (link_service.name.title(), user.name)
                 )
 
@@ -145,7 +191,14 @@ def add_link_to_playlists_from_event(event):
 
         return True
 
-def post_messages_after_link_shared(native_track_info, channel, cs_track_info=None, native_successes=None, native_failures=None, cs_successes=None, cs_failures=None):
+
+def post_messages_after_link_shared(
+        native_track_info, channel,
+        cs_track_info=None,
+        native_successes=None,
+        native_failures=None,
+        cs_successes=None,
+        cs_failures=None):
     native_title = native_track_info.get_track_name()
 
     response_message = ""
