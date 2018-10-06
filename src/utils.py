@@ -47,14 +47,13 @@ def add_manual_track_to_playlists(track_info, channel_id, playlist_name=None, se
         successes = []
         failures = []
         for pl in playlists:
-            success, ti, error_msg = ServiceBase.from_enum(pl.service)(
+            success, _, error_msg = ServiceBase.from_enum(pl.service)(
                 credentials=pl.user.credentials_for_service(pl.service)).add_manual_track_to_playlist(
                 playlist=pl,
                 track_name=track_info.name,
                 artist=track_info.artists)
 
             if success:
-                track_info = ti
                 successes.append("%s (%s)" % (pl.name, pl.service.name.title()))
             else:
                 failures.append("%s (%s) - %s" % (pl.name, pl.service.name.title(), error_msg))
