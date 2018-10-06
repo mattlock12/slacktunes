@@ -29,7 +29,7 @@ class TrackInfo(object):
             else:
                 return ", ".join(self.artists.split(' '))
 
-        return None
+        return ''
 
     def artists_for_search(self):
         if not self.artists:
