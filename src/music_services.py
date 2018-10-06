@@ -577,7 +577,7 @@ class Spotify(ServiceBase):
         search_kwargs.update(kwargs)
         try:
             return service.search(q=search_string, **search_kwargs)
-        except SpotifyException as ssss:
+        except SpotifyException:
             return None
 
     def get_native_track_info_from_track_info(self, track_info, is_spotify=False):
@@ -598,7 +598,7 @@ class Spotify(ServiceBase):
         best_score_so_far = 0
         contenders = []
         target = track_info.track_name_for_comparison()
-        # TODO: break this out and do token sort after this
+        # TODO: break this out into helper
         """
         STAGE 1: a token_set_ratio
         
@@ -699,6 +699,9 @@ class Spotify(ServiceBase):
             )
         else:
             winner = max(contenders, key=lambda c: c['popularity'])
+
+        if not winner:
+            return None
 
         return TrackInfo(
             raw_json=winner,

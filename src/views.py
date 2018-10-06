@@ -300,7 +300,7 @@ def add_track():
     /add_track track_name | artist | playlist(optional) | service(optional)
     """
     if request.form.get('channel_name') == 'directmessage':
-        return "Can't init playlist from private channel", 200
+        return "Can't add tracks in private channel", 200
 
     channel_id = request.form['channel_id']
     command_text_args = request.form['text'].split('|')
