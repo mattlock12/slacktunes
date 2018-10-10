@@ -68,6 +68,8 @@ class TrackInfo(object):
         new_title = re.sub(r"[|&'_-]", "", self.name)
         new_title = re.sub(r'\([^)]*\)', '', new_title)
         new_title = re.sub(r'\[[^]]*\]', '', new_title)
+        # take out multiple spaces
+        new_title = ' '.join(new_title.split())
 
         for word in BAD_WORDS:
             replacer = re.compile("\\b%s\\b" % word, re.IGNORECASE)
@@ -581,19 +583,27 @@ class Spotify(ServiceBase):
             return None
 
     def get_native_track_info_from_track_info(self, track_info, is_spotify=False):
-        search_str = "track:%s" % track_info.sanitized_track_name()
-        if is_spotify:
-            search_str += " artist:%s" % track_info.artists_for_search()
+        search_str = track_info.sanitized_track_name()
+        track_results = None
 
-        results = self.search(search_string=search_str)
+        if is_spotify:
+            results =  self.search(
+                "track:%s artist:%s" % (track_info.sanitized_track_name(), track_info.artists_for_search()))
+        else:
+            track_results = self.search('track:%s' % search_str)
+            results = self.search(search_str)
+
+
         if not results:
             return None
-        if not results['tracks']:
+        if not results.get('tracks'):
             return None
-        if not results['tracks']['items']:
+        if not results['tracks'].get('items'):
             return None
 
         items = results['tracks']['items']
+        if track_results:
+            items += track_results.get('tracks', {}).get('items', [])
 
         best_score_so_far = 0
         contenders = []
@@ -652,12 +662,13 @@ class Spotify(ServiceBase):
                 winner = best_contenders[0]
             else:
                 winner = max(contenders, key=lambda c: c['popularity'])
-                return TrackInfo(
-                    raw_json=winner,
-                    name=winner['name'],
-                    artists=[a['name'] for a in winner['artists']],
-                    track_id=winner['id']
-                )
+
+            return TrackInfo(
+                raw_json=winner,
+                name=winner['name'],
+                artists=[a['name'] for a in winner['artists']],
+                track_id=winner['id']
+            )
 
         """
         STAGE 3:
