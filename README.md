@@ -14,7 +14,13 @@ Slacktunes uses sqlite for development so add this to `local_settings.py`:
 local_settings.py
 
 DB_URI = 'sqlite:////tmp/test.db'
+SLACKTUNES_USER_ID = <your slack user id>
 ```
+
+Get your slack user id by:
+1. Going to [https://www.slack.com]
+1. Navigating to your workspace
+1. Copying your id from the url of your private messages channel
 
 To create the initial test db:
 ```
@@ -41,6 +47,7 @@ Add `ngrok_url` to your `local_settings.py` which should now look like:
 local_settings.py
 
 DB_URI = 'sqlite:////tmp/test.db'
+SLACKTUNES_USER_ID = <your slack user id>
 BASE_URI = <ngrok_url>
 ```
 
@@ -70,6 +77,7 @@ Add these to `local_settings.py` as:
 local_settings.py
 
 DB_URI = 'sqlite:////tmp/test.db'
+SLACKTUNES_USER_ID = <your slack user id>
 BASE_URI = <ngrok_url>
 
 SLACK_CLIENT_ID = <client id>
@@ -116,6 +124,7 @@ Add the client keys/secrets to your `local_settings.py` file.
 local_settings.py
 
 DB_URI = 'sqlite:////tmp/test.db'
+SLACKTUNES_USER_ID = <your slack user id>
 BASE_URI = <ngrok_url>
 
 SLACK_CLIENT_ID = <client id>
