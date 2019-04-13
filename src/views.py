@@ -33,9 +33,6 @@ def verified_slack_request(f):
     return decorated_function
 
 
-
-
-
 # VIEWS
 @application.route('/')
 def index():
@@ -78,8 +75,9 @@ def slackoauth():
 
 def credential_exchange(service_enum):
     service = ServiceBase.from_enum(service_enum)
-
-    if 'code' not in request.args:
+    code = request.args.get('code', None)
+    
+    if not code:
         return "No code in request args", 400
 
     if 'state' not in request.args:
@@ -90,7 +88,6 @@ def credential_exchange(service_enum):
     if not slack_user_id or not slack_username:
         return "No userdata to associate", 400
 
-    code = request.args.get('code')
     credentials = service.exchange(code=code, state=state)
     application.logger.info("Successfully got credentials from %s" % service_enum.name.title())
 
@@ -178,7 +175,11 @@ def create_playlist():
     music_service = ServiceBase.from_enum(music_service_enum)(credentials=credentials)
 
     playlist = Playlist.query.filter_by(
-        user_id=user.id, name=playlist_name, service=music_service_enum, channel_id=channel_id).first()
+        user_id=user.id,
+        name=playlist_name,
+        service=music_service_enum,
+        channel_id=channel_id
+    ).first()
     if playlist:
         return "Found a playlist %s (%s) for %s in this channel already" % (
             playlist_name, music_service_enum.name.title(), slack_user_name)
@@ -194,7 +195,7 @@ def create_playlist():
                         user_id=user.id)
     playlist.save()
 
-    return "Created playlist %s for %s in this channel! Might I suggest /scrape_music next?" % (
+    return "Created playlist %s for %s in this channel!" % (
         playlist_name, slack_user_name), 200
 
 
@@ -214,7 +215,7 @@ def scrape_music():
     playlist_name = command_text_args[0]
     playlists_match = [pl for pl in playlists_in_channel if pl.name == playlist_name]
     if not playlists_match:
-        return "I couldn't find a playlist named %s in this channel..." % playlist_name
+        return "I couldn't find a playlist named %s in this channel..." % playlist_name, 200
 
     playlist = playlists_match[0]
     user = playlist.user
