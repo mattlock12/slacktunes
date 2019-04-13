@@ -4,6 +4,7 @@ SLACK_CLIENT_ID = ''
 SLACK_CLIENT_SECRET = ''
 SLACK_OAUTH_TOKEN = ''
 SLACK_VERIFICATION_TOKEN = ''
+SERVICE_SLACK_ID = ''
 
 SLACKTUNES_USER_ID = ''
 
@@ -14,11 +15,11 @@ SPOTIFY_CLIENT_ID = ''
 SPOTIFY_CLIENT_SECRET = ''
 
 MYSQL_DB_FORMAT = 'mysql+pymysql://{username}:{password}@{server}:{port}/{db}'
-MYSQL_USERNAME = ''
-MYSQL_PASSWORD = ''
-MYSQL_SERVER = ''
-MYSQL_PORT = ''
-MYSQL_DBNAME = ''
+MYSQL_USERNAME = 'slacktuner'
+MYSQL_PASSWORD = 'slacktuner'
+MYSQL_SERVER = 'db'
+MYSQL_PORT = '3306'
+MYSQL_DBNAME = 'slacktunes_dev'
 
 DB_URI = MYSQL_DB_FORMAT.format(
     username=MYSQL_USERNAME,

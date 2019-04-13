@@ -5,6 +5,8 @@ services:
     restart: always
     environment:
       MYSQL_ROOT_PASSWORD: password
+    volumes:
+      - ./database-init.sql:/docker-entrypoint-initdb.d/databases.sql
 
   redis:
     image: redis
