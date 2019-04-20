@@ -1,11 +1,11 @@
-import logging
-
-from app import application
+from app import application, db
+from src.models import *
 from src.views import *
 
+def create_tables():
+    db.create_all()
+
+
 if __name__ == '__main__':
-    logger = logging.getLogger(__name__)
-    handler = RotatingFileHandler('slacktunes.log', maxBytes=1000, backupCount=1)
-    handler.setLevel(logging.INFO)
-    application.logger.addHandler(handler)
+    create_tables()
     application.run(host='0.0.0.0', port=8000)
