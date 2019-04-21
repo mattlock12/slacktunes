@@ -27,7 +27,7 @@ class BaseModelMixin(object):
 
 class Team(db.Model, BaseModelMixin):
     id = db.Column(db.Integer, primary_key=True)
-    slack_id = db.Column(db.Integer)
+    slack_id = db.Column(db.String(256))
     slack_access_token = db.Column(db.String(256))
 
 

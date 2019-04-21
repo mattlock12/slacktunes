@@ -9,7 +9,14 @@ from oauth2client.client import OAuth2WebServerFlow
 from spotipy import Spotify as Spotipy
 from spotipy.client import SpotifyException
 
-from settings import YOUTUBE_CLIENT_ID, YOUTUBE_CLIENT_SECRET, YOUTUBE_REDIRECT_URI, SPOTIFY_CLIENT_ID, SPOTIFY_CLIENT_SECRET, SPOTIFY_REDIRECT_URI
+from settings import (
+    YOUTUBE_CLIENT_ID,
+    YOUTUBE_CLIENT_SECRET,
+    YOUTUBE_REDIRECT_URI,
+    SPOTIFY_CLIENT_ID,
+    SPOTIFY_CLIENT_SECRET,
+    SPOTIFY_REDIRECT_URI
+)
 
 from .constants import BAD_WORDS, InvalidEnumException, MusicService
 from .oauth_wrappers import SpotipyClientCredentialsManager, SpotipyDBWrapper
@@ -440,12 +447,13 @@ class Spotify(ServiceBase):
 
     @classmethod
     def get_flow(cls, state=None):
-        return SpotipyDBWrapper(client_id=SPOTIFY_CLIENT_ID,
-                                client_secret=SPOTIFY_CLIENT_SECRET,
-                                redirect_uri=SPOTIFY_REDIRECT_URI,
-                                scope=cls.SCOPE,
-                                state=state,
-                                )
+        return SpotipyDBWrapper(
+            client_id=SPOTIFY_CLIENT_ID,
+            client_secret=SPOTIFY_CLIENT_SECRET,
+            redirect_uri=SPOTIFY_REDIRECT_URI,
+            scope=cls.SCOPE,
+            state=state,
+        )
 
     @classmethod
     def get_auth_uri(cls, state=None):

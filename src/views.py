@@ -11,7 +11,7 @@ from settings import BASE_URI, SLACK_CLIENT_ID, SLACK_CLIENT_SECRET, SLACK_OAUTH
 
 from app import application
 from .constants import InvalidEnumException, MusicService, SlackUrl
-from .models import Credential, Playlist, User
+from .models import Credential, Playlist, User, Team
 from .music_services import ServiceBase, TrackInfo
 from .utils import get_links, post_update_to_chat, add_link_to_playlists_from_event, add_manual_track_to_playlists
 
@@ -48,8 +48,8 @@ def oauthsuccess(service_abbrv):
 @application.route('/auth/s/<service>/u/<userdata>')
 def auth(service, userdata):
     service = ServiceBase.from_string(service)
-    slack_user_id, slack_user_name = userdata.split(':')
-    if not slack_user_id or not slack_user_name or not service:
+    slack_user_id, slack_user_name, team_id = userdata.split(':')
+    if not slack_user_id or not slack_user_name or not service or not team_id:
         return "Couldn't auth: no slack userdata", 500
 
     auth_uri = service.get_auth_uri(state=userdata)
@@ -83,17 +83,22 @@ def credential_exchange(service_enum):
     if 'state' not in request.args:
         return "No state param in request args", 400
 
-    state = request.args.get('state', ":")
-    slack_user_id, slack_username = state.split(':')
+    state = request.args.get('state', "::")
+    slack_user_id, slack_username, team_id = state.split(':')
     if not slack_user_id or not slack_username:
         return "No userdata to associate", 400
 
     credentials = service.exchange(code=code, state=state)
     application.logger.info("Successfully got credentials from %s" % service_enum.name.title())
 
+    team = Team.query.filter_by(slack_id=team_id).first()
+    if not team:
+        team = Team(slack_id=team_id)
+        team.save()
+
     user = User.query.filter_by(slack_id=slack_user_id).first()
     if not user:
-        user = User(slack_id=slack_user_id, name=slack_username)
+        user = User(slack_id=slack_user_id, name=slack_username, team_id=team.id)
         user.save()
 
     creds = [creds for creds in user.credentials if creds.service is service_enum]
@@ -143,6 +148,7 @@ def create_playlist():
     channel_name = request.form['channel_name']
     slack_user_id = request.form['user_id']
     slack_user_name = request.form['user_name']
+    team_id = request.form['team_id']
     command_text_args = request.form['text'].split()
 
     # defaults
@@ -158,17 +164,21 @@ def create_playlist():
             except InvalidEnumException:
                 pass
 
+    team = Team.query.filter_by(slack_id=team_id).first()
+    if not team:
+        return "No team in this channel", 200
+
     user = User.query.filter_by(slack_id=slack_user_id).first()
     if not user:
         # prompt them to auth on the website
-        state = "%s:%s" % (slack_user_id, slack_user_name)
+        state = "%s:%s:%s" % (slack_user_id, slack_user_name, team_id)
         return "No verified auth for %s. Please go to %s%s and allow access" % \
                (slack_user_name, BASE_URI, url_for('auth', service=music_service_enum.name.lower(), userdata=state))
 
     credentials = user.credentials_for_service(service=music_service_enum)
     if not credentials:
         # prompt them to auth on the website
-        state = "%s:%s" % (slack_user_id, slack_user_name)
+        state = "%s:%s:%s" % (slack_user_id, slack_user_name, team_id)
         return "No verified auth for %s. Please go to %s%s and allow access" % \
                (slack_user_name, BASE_URI, url_for('auth', service=music_service_enum.name.lower(), userdata=state))
 
@@ -188,11 +198,14 @@ def create_playlist():
     if not success:
         return "Unable to create playlist", 200
 
-    playlist = Playlist(name=playlist_name,
-                        channel_id=channel_id,
-                        service=music_service_enum,
-                        service_id=playlist_snippet['id'],
-                        user_id=user.id)
+    playlist = Playlist(
+        name=playlist_name,
+        channel_id=channel_id,
+        service=music_service_enum,
+        service_id=playlist_snippet['id'],
+        user_id=user.id,
+        team_id=team.id
+    )
     playlist.save()
 
     return "Created playlist %s for %s in this channel!" % (
