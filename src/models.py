@@ -25,6 +25,12 @@ class BaseModelMixin(object):
         db.session.commit()
 
 
+class Team(db.Model, BaseModelMixin):
+    id = db.Column(db.Integer, primary_key=True)
+    slack_id = db.Column(db.Integer)
+    slack_access_token = db.Column(db.String(256))
+
+
 class Playlist(db.Model, BaseModelMixin):
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(100))
@@ -34,15 +40,19 @@ class Playlist(db.Model, BaseModelMixin):
     # relations
     user_id = db.Column(db.Integer, db.ForeignKey('user.id'))
     user = db.relationship('User', backref=db.backref('playlists', lazy='dynamic'))
+    
+    team_id = db.Column(db.Integer, db.ForeignKey('team.id'))
+    team = db.relationship('Team', backref=db.backref('playlists', lazy='dynamic'))
 
     __table_args__ = (UniqueConstraint('service', 'service_id', name='_service_serviceid_constraint'),)
 
-    def __init__(self, name, channel_id, service, service_id, user_id):
+    def __init__(self, name, channel_id, service, service_id, user_id, team_id):
         self.name = name
         self.channel_id = channel_id
         self.service = service
         self.service_id = service_id
         self.user_id = user_id
+        self.team_id = team_id
 
 
 class User(db.Model, BaseModelMixin):
@@ -52,9 +62,13 @@ class User(db.Model, BaseModelMixin):
     last_posted_auth_error = db.Column(db.DateTime, default=now)
     credentials = db.relationship('Credential', backref='user', lazy='dynamic')
 
-    def __init__(self, name, slack_id):
+    team_id = db.Column(db.Integer, db.ForeignKey('team.id'))
+    team = db.relationship('Team', backref=db.backref('users', lazy='dynamic'))
+
+    def __init__(self, name, slack_id, team_id):
         self.name = name
         self.slack_id = slack_id
+        self.team_id = team_id
 
     def credentials_for_service(self, service):
         service_creds = [c for c in self.credentials if c.service is service]

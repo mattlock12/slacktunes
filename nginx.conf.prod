@@ -5,12 +5,12 @@ http {
   
   server {
     listen 80 default_server;
-    server_name entend.io www.entend.io;
-    return 301 https://entend.io$request_uri;
+    server_name slacktunes.me www.slacktunes.me;
+    return 301 https://slacktunes.me$request_uri;
   }
 
   server {
     listen 443 ssl default_server;
-    server_name entend.io www.entend.io;  
+    server_name slacktunes.me www.slacktunes.me;  
   }
 }
