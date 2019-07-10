@@ -111,8 +111,6 @@ class ServiceBase(object):
             return Youtube
         elif string.lower()[0] == 's':
             return Spotify
-        elif string.lower()[0] == 'g':
-            return GMusic
         else:
             raise Exception("Invalid service")
 
@@ -122,8 +120,6 @@ class ServiceBase(object):
             return Youtube
         elif 'spotify' in link:
             return Spotify
-        elif 'play.google.com/music' in link:
-            return GMusic
         else:
             return None
 
@@ -133,8 +129,6 @@ class ServiceBase(object):
             return Youtube
         elif enum is MusicService.SPOTIFY:
             return Spotify
-        elif enum is MusicService.GMUSIC:
-            return GMusic
         else:
             raise InvalidEnumException
 
@@ -199,11 +193,12 @@ class Youtube(ServiceBase):
 
     @classmethod
     def get_flow(cls):
-        return OAuth2WebServerFlow(client_id=YOUTUBE_CLIENT_ID,
-                                   client_secret=YOUTUBE_CLIENT_SECRET,
-                                   scope=cls.SCOPE,
-                                   redirect_uri=YOUTUBE_REDIRECT_URI
-                                   )
+        return OAuth2WebServerFlow(
+            client_id=YOUTUBE_CLIENT_ID,
+            client_secret=YOUTUBE_CLIENT_SECRET,
+            scope=cls.SCOPE,
+            redirect_uri=YOUTUBE_REDIRECT_URI
+        )
 
     @classmethod
     def get_auth_uri(cls, state=None):
@@ -220,15 +215,15 @@ class Youtube(ServiceBase):
 
     def _get_playlist_create_body(self, playlist_name, channel_id):
         return {
-        "status": {
-            "privacyStatus": "Public",
-        },
-        "kind": "youtube#playlist",
-        "snippet": {
-            "description": "slacktunes created playlist! Check out https://slacktunes.me",
-            "tags": ["slacktunes", ],
-            "channelId": channel_id,
-            "title": playlist_name,
+            "status": {
+                "privacyStatus": "Public",
+            },
+            "kind": "youtube#playlist",
+            "snippet": {
+                "description": "slacktunes created playlist! Check out https://slacktunes.me",
+                "tags": ["slacktunes", ],
+                "channelId": channel_id,
+                "title": playlist_name,
             },
         }
 
@@ -440,12 +435,13 @@ class Spotify(ServiceBase):
 
     @classmethod
     def get_flow(cls, state=None):
-        return SpotipyDBWrapper(client_id=SPOTIFY_CLIENT_ID,
-                                client_secret=SPOTIFY_CLIENT_SECRET,
-                                redirect_uri=SPOTIFY_REDIRECT_URI,
-                                scope=cls.SCOPE,
-                                state=state,
-                                )
+        return SpotipyDBWrapper(
+            client_id=SPOTIFY_CLIENT_ID,
+            client_secret=SPOTIFY_CLIENT_SECRET,
+            redirect_uri=SPOTIFY_REDIRECT_URI,
+            scope=cls.SCOPE,
+            state=state
+        )
 
     @classmethod
     def get_auth_uri(cls, state=None):
@@ -547,8 +543,10 @@ class Spotify(ServiceBase):
     def list_tracks_in_playlist(self, playlist):
         service = self.get_wrapped_service()
 
-        tracks_request = service.user_playlist_tracks(user=self.get_user_info_from_spotify()['id'],
-                                                      playlist_id=playlist.service_id)
+        tracks_request = service.user_playlist_tracks(
+            user=self.get_user_info_from_spotify()['id'],
+            playlist_id=playlist.service_id
+        )
         tracks = []
         while tracks_request:
             tracks += [
@@ -734,9 +732,11 @@ class Spotify(ServiceBase):
             return False, [et for et in existing_tracks if et.track_id == track_id][0], "Already in playlist"
 
         try:
-            resp = service.user_playlist_add_tracks(user=self.get_user_info_from_spotify()['id'],
-                                                    playlist_id=playlist.service_id,
-                                                    tracks=[track_id])
+            resp = service.user_playlist_add_tracks(
+                user=self.get_user_info_from_spotify()['id'],
+                playlist_id=playlist.service_id,
+                tracks=[track_id]
+            )
         except SpotifyException as e:
             return False, None, e
 
@@ -760,7 +760,3 @@ class Spotify(ServiceBase):
                 continue
 
         return return_messages
-
-
-class GMusic(ServiceBase):
-    pass
