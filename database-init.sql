@@ -1,0 +1,3 @@
+CREATE DATABASE slacktunes_dev;
+CREATE USER slacktuner WITH PASSWORD 'slacktuner';
+GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO slacktuner;

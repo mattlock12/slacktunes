@@ -13,6 +13,7 @@ from app import application
 from .constants import InvalidEnumException, MusicService, SlackUrl
 from .models import Credential, Playlist, User
 from .music_services import ServiceBase, TrackInfo
+from .tasks import add
 from .utils import get_links, post_update_to_chat, add_link_to_playlists_from_event, add_manual_track_to_playlists
 
 

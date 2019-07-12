@@ -14,12 +14,6 @@ services:
     image: redis
     restart: always
 
-  # rabbitmq:
-  #   image: rabbitmq:latest
-  #   restart: always
-  #   depends_on:
-  #     - redis
-
   celeryworker:
     build: ./
     restart: always
@@ -37,4 +31,6 @@ services:
       - db
       - redis
     tty: true
-    command: [ "gunicorn", "application:app" ]
+    ports:
+      - 8000:8000
+    command: [ "gunicorn", "-b", "0.0.0.0:8000", "application:application" ]
