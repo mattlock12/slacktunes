@@ -16,11 +16,13 @@ from .oauth_wrappers import SpotipyClientCredentialsManager, SpotipyDBWrapper
 
 
 class TrackInfo(object):
-    def __init__(self, name, raw_json=None, artists=None, track_id=None):
+    def __init__(self, name, platform, raw_json=None, artists=None, track_id=None, link=None):
         self.name = name
+        self.platform = platform
         self.raw_json = raw_json  # NOTE: for youtube responses, this means raw['snippet']
         self.artists = artists
         self.track_id = track_id
+        self.link = link
 
     def artists_display_name(self):
         if self.artists:
@@ -32,6 +34,9 @@ class TrackInfo(object):
         return ''
 
     def artists_for_search(self):
+        if self.platform is Platform.YOUTUBE:
+            return ''
+
         if not self.artists:
             return ''
 
@@ -64,6 +69,33 @@ class TrackInfo(object):
 
         return ''
 
+    def track_open_url(self):
+        if self.link:
+            return self.link
+        
+        if self.platform is Platform.YOUTUBE:
+            return "https://www.youtube.com/watch?v=%s" % self.track_id
+        elif self.platform is Platform.SPOTIFY:
+            return "https://open.spotify.com/track/%s" % self.track_id
+        else:
+            return None
+
+    def track_image_url(self):
+        if not self.raw_json:
+            return None
+    
+        if self.platform is Platform.YOUTUBE:
+            return self.raw_json.get('thumbnails', {}).get('default')
+        elif self.platform is Platform.SPOTIFY:
+            images = self.raw_json.get('images')
+            if not images:
+                return None
+            
+            return min(images, key=lambda im: im['height']).get('url', None)
+        else:
+            return None
+
+
     def sanitized_track_name(self):
         new_title = re.sub(r"[|&'_-]", "", self.name)
         new_title = re.sub(r'\([^)]*\)', '', new_title)
@@ -75,6 +107,7 @@ class TrackInfo(object):
             replacer = re.compile("\\b%s\\b" % word, re.IGNORECASE)
             new_title = replacer.sub('', new_title)
         return new_title
+
 
 
 class NoCredentialsError(Exception):
