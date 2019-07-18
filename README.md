@@ -41,7 +41,7 @@ To create the initial test db:
 ```
 docker-compose exec -it slacktunes_backend /bin/bash
 
-COMING SOON: flask db upgrade
+flask db upgrade
 ```
 
 Your app should now be running! But it needs more setup. Visit `localhost:8080` and also `ngrok_url` in your browser to check that everything is working.
