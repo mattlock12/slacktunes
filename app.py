@@ -3,6 +3,7 @@ import uuid
 
 from flask import Flask
 from flask_sqlalchemy import SQLAlchemy
+from flask_migrate import Migrate
 
 from settings import DB_URI
 
@@ -14,3 +15,5 @@ handler = logging.StreamHandler()
 handler.setLevel(logging.INFO)
 logger.addHandler(handler)
 db = SQLAlchemy(application)
+
+migrate = Migrate(application, db)

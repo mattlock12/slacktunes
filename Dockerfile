@@ -11,4 +11,6 @@ WORKDIR /app
 
 COPY . .
 
+RUN flask db upgrade
+
 EXPOSE 8000
