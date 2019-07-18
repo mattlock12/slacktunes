@@ -14,7 +14,7 @@ This guide to local dev relies on ngrok and the url that it generates when you u
 
 In a separate terminal window run:
 ```
-ngrok http 8000
+ngrok http 8080
 ```
 which will output a url that will hereby referred to as `ngrok_url`
 
@@ -41,10 +41,10 @@ To create the initial test db:
 ```
 docker-compose exec -it slacktunes_backend /bin/bash
 
-flask db upgrade
+COMING SOON: flask db upgrade
 ```
 
-Your app should now be running! But it needs more setup. Visit `localhost:8000` and also `ngrok_url` in your browser to check that everything is working.
+Your app should now be running! But it needs more setup. Visit `localhost:8080` and also `ngrok_url` in your browser to check that everything is working.
 
 You should see a screen that says `Welcome to Slacktunes`
 
