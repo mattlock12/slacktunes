@@ -1,4 +1,5 @@
-# Slacktunes
+#Slacktunes
+
 Adds youtube or spotify links shared on slack to a youtube or spotify playlist
 
 ### Local Development
@@ -6,60 +7,51 @@ Developing a slack app that uses 3rd party APIs requires more setup than the usu
 
 This guide assumes you already have a slack workspace and are authorized to add apps.
 
-#### Setting up the app
-`settings.py` is empty, but imports `local_settings.py` which you should create at the top level of the app directory and which is where you should be adding these properties
-
-Slacktunes uses sqlite for development so add this to `local_settings.py`:
-```
-local_settings.py
-
-DB_URI = 'sqlite:////tmp/test.db'
-SLACKTUNES_USER_ID = <your slack user id>
-```
-
-Get your slack user id by:
-1. Going to [https://www.slack.com]
-1. Navigating to your workspace
-1. Copying your id from the url of your private messages channel
-
-To create the initial test db:
-```
-from app import db
-db.create_all()
-```
-
-To run the app:
-```
-python application.py
-```
-
 #### Using ngrok
-[ngrok][https://ngrok.com/] is an easy way to proxy a randomly generated url to your localhost without setting up any DNS or ssl certificates
+[ngrok](https://ngrok.com/) is an easy way to proxy a randomly generated url to your localhost without setting up any DNS or ssl certificates
+
+This guide to local dev relies on ngrok and the url that it generates when you use it
 
 In a separate terminal window run:
 ```
-ngrok http <port_your_local_is_running_on>
+ngrok http 8000
 ```
 which will output a url that will hereby referred to as `ngrok_url`
 
-Add `ngrok_url` to your `local_settings.py` which should now look like:
-```
-local_settings.py
-
-DB_URI = 'sqlite:////tmp/test.db'
-SLACKTUNES_USER_ID = <your slack user id>
-BASE_URI = <ngrok_url>
-```
+Add `ngrok_url` to your `dev.env` as `NGROK_URL` 
 
 ### NOTE:
-Every time you shut down ngrok and restart it, you'll have to change any place you're using `ngrok_url`
+Every time you shut down ngrok and restart it, ngrok will generate a new url and you'll have to change any place you're using `ngrok_url`
 #### Including:
-* slack
-* youtube developer apis
-* spotify developer apis
+* dev.env (and then `docker-compose restart`)
+* slack (for commands and events)
+* youtube developer apis (for oauth callback urls)
+* spotify developer apis (for oauth callback urls)
+
+
+#### Setting up the app
+`dev.env` is the environment file used by Docker. It's just a template: you'll have to fill in the values.
+
+To start the app:
+```
+docker-compose up -d
+```
+
+To create the initial test db:
+```
+docker-compose exec -it slacktunes_backend /bin/bash
+
+flask db upgrade
+```
+
+Your app should now be running! But it needs more setup. Visit `localhost:8000` and also `ngrok_url` in your browser to check that everything is working.
+
+You should see a screen that says `Welcome to Slacktunes`
+
 
 #### Creating a Slack App for you workspace
-Create a new slack app at [https://api.slack.com/apps]. Name it whatever you want, but might I suggest `slacktunes_local`
+Create a new slack app at https://api.slack.com/apps. Name it whatever you want, but might I suggest `slacktunes_local`
+
 ##### Oauth & Permissions
 To post to slack channels, you'll need an oauth token. The scopes that slacktunes needs are
 * channels:history
@@ -69,15 +61,13 @@ To post to slack channels, you'll need an oauth token. The scopes that slacktune
 
 Add those and click: `Install App to Workspace`
 
-This will give you an oauth token that should be added to `local_settings.py` as `SLACK_OAUTH_TOKEN`
+This will give you an oauth token that should be added to `dev.env` as `SLACK_OAUTH_TOKEN`
 
 If you look in the `Basic Information` tab of the app page, you should also see `Client Id`, `Client Secret`, and `Verification Token`
-Add these to `local_settings.py` as:
+Add these to `dev.env` as:
 ```
-local_settings.py
+dev.env
 
-DB_URI = 'sqlite:////tmp/test.db'
-SLACKTUNES_USER_ID = <your slack user id>
 BASE_URI = <ngrok_url>
 
 SLACK_CLIENT_ID = <client id>
@@ -87,7 +77,7 @@ SLACK_VERIFICATION_TOKEN = <verification_token>
 ```
 
 ##### Slash commands
-Slacktunes uses 4 slash commands.
+Slacktunes uses 4 slash commands that you should add through the slack apps web UI.
 The command is the same as the url to the playlist, e.g.:
 ```
 Command: /<command>
@@ -114,18 +104,16 @@ Slack also requires you to define up to 5 domains which will trigger the `link_s
 * youtu.be (for mobile)
 
 #### Getting Youtube & Spotify API keys
-Sign up for a [youtube developer account][https://developers.google.com/youtube/]
+Sign up for a [youtube developer account](https://developers.google.com/youtube/)
 
-And a [spotify developer account][https://developer.spotify.com/]
+And a [spotify developer account](https://developer.spotify.com/)
 
-Add the client keys/secrets to your `local_settings.py` file.
+Add the client keys/secrets to your `dev.env` file.
 
 ```
-local_settings.py
+dev.env
 
-DB_URI = 'sqlite:////tmp/test.db'
-SLACKTUNES_USER_ID = <your slack user id>
-BASE_URI = <ngrok_url>
+NGROK_URI = <ngrok_url>
 
 SLACK_CLIENT_ID = <client id>
 SLACK_CLIENT_SECRET = <client secret>
@@ -139,4 +127,6 @@ YOUTUBE_CLIENT_SECRET = <your_youtube_client_secret>
 ```
 
 #### That's it!
-You should be good to go. Happy slacktuning!
+Give it a `docker-compose restart` and you should be good to go!
+
+Happy slacktuning!
