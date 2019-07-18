@@ -5,7 +5,7 @@ from .models import Credential, Playlist, User
 from .music_services import ServiceBase, MusicService
 
 from application import application
-from settings import SLACK_OAUTH_TOKEN, SERVICE_SLACK_ID
+from settings import SLACK_OAUTH_TOKEN
 
 
 def get_links(channel_history):
@@ -115,7 +115,7 @@ def add_link_to_playlists_from_event(event):
             # has authorized us to use their account
             user = User.query.filter_by(slack_id=event.get('user')).first()
             if not user:
-                user = User.query.filter_by(slack_id=SERVICE_SLACK_ID)
+                user = User.query.filter_by(slack_id=SLACKTUNES_USER_ID)
             native_creds = user.credentials_for_service(service=link_service)
             if not native_creds:
                 cs_failures.append(

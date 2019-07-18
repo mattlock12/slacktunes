@@ -1,0 +1,38 @@
+version: "3"
+services:
+
+  db:
+    image: postgres
+    restart: always
+    environment:
+      POSTGRES_PASSWORD: password
+    tty: true
+    volumes:
+      - ./database-init.sql:/docker-entrypoint-initdb.d/databases.sql
+
+  redis:
+    image: redis
+    restart: always
+
+  # celeryworker:
+  #   build: ./
+  #   restart: always
+  #   depends_on:
+  #     - redis
+  #   command: ["celery", "-A", "src", "worker", "-l", "info"]
+
+  slacktunes:
+    build: ./
+    restart: always
+    container_name: slacktunes_backend
+    volumes:
+      - ./:/app
+    depends_on:
+      - db
+      - redis
+    env_file:
+      - dev.env
+    tty: true
+    ports:
+      - 8080:8080
+    command: [ "gunicorn", "-b", "0.0.0.0:8080", "application:application" ]
