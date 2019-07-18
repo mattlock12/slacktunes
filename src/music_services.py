@@ -111,8 +111,6 @@ class ServiceBase(object):
             return Youtube
         elif string.lower()[0] == 's':
             return Spotify
-        elif string.lower()[0] == 'g':
-            return GMusic
         else:
             raise Exception("Invalid service")
 
@@ -122,8 +120,6 @@ class ServiceBase(object):
             return Youtube
         elif 'spotify' in link:
             return Spotify
-        elif 'play.google.com/music' in link:
-            return GMusic
         else:
             return None
 
@@ -133,8 +129,6 @@ class ServiceBase(object):
             return Youtube
         elif enum is MusicService.SPOTIFY:
             return Spotify
-        elif enum is MusicService.GMUSIC:
-            return GMusic
         else:
             raise InvalidEnumException
 
@@ -760,7 +754,3 @@ class Spotify(ServiceBase):
                 continue
 
         return return_messages
-
-
-class GMusic(ServiceBase):
-    pass

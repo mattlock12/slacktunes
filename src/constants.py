@@ -15,7 +15,6 @@ class SlackUrl(Enum):
 class MusicService(Enum):
     YOUTUBE = 'Youtube'
     SPOTIFY = 'Spotify'
-    GMUSIC = 'Gmusic'
 
     @classmethod
     def from_string(cls, string):
@@ -23,8 +22,6 @@ class MusicService(Enum):
             return cls.YOUTUBE
         elif string.lower()[0] == 's':
             return cls.SPOTIFY
-        elif string.lower()[0] == 'g':
-            return cls.GMUSIC
         else:
             raise InvalidEnumException
 
@@ -34,8 +31,6 @@ class MusicService(Enum):
             return cls.YOUTUBE
         elif 'spotify' in link:
             return cls.SPOTIFY
-        elif 'play.google.com/music' in link:
-            return cls.GMUSIC
         else:
             return None
 
