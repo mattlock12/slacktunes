@@ -18,7 +18,7 @@ from settings import (
     SPOTIFY_REDIRECT_URI
 )
 
-from .constants import BAD_WORDS, InvalidEnumException, MusicService
+from .constants import BAD_WORDS, InvalidEnumException, Platform
 from .oauth_wrappers import SpotipyClientCredentialsManager, SpotipyDBWrapper
 
 
@@ -108,7 +108,7 @@ def credentials_required(f):
 class ServiceBase(object):
     def __init__(self, credentials):
         self.credentials = credentials
-        self.service = None
+        self.platform = None
         self.track_info = {}
         self.tracks_in_playlist = {}
 
@@ -118,10 +118,8 @@ class ServiceBase(object):
             return Youtube
         elif string.lower()[0] == 's':
             return Spotify
-        elif string.lower()[0] == 'g':
-            return GMusic
         else:
-            raise Exception("Invalid service")
+            raise Exception("Invalid platform")
 
     @classmethod
     def from_link(self, link):
@@ -129,19 +127,15 @@ class ServiceBase(object):
             return Youtube
         elif 'spotify' in link:
             return Spotify
-        elif 'play.google.com/music' in link:
-            return GMusic
         else:
             return None
 
     @classmethod
     def from_enum(cls, enum):
-        if enum is MusicService.YOUTUBE:
+        if enum is Platform.YOUTUBE:
             return Youtube
-        elif enum is MusicService.SPOTIFY:
+        elif enum is Platform.SPOTIFY:
             return Spotify
-        elif enum is MusicService.GMUSIC:
-            return GMusic
         else:
             raise InvalidEnumException
 
@@ -191,7 +185,7 @@ class ServiceBase(object):
         ti = TrackInfo(name=track_name, artists=artist)
         native_track_info = self.get_native_track_info_from_track_info(
             track_info=ti,
-            is_spotify=playlist.service == MusicService.SPOTIFY
+            is_spotify=playlist.service == Platform.SPOTIFY
         )
         if not native_track_info:
             return False, None, 'No track info found'
@@ -206,11 +200,12 @@ class Youtube(ServiceBase):
 
     @classmethod
     def get_flow(cls):
-        return OAuth2WebServerFlow(client_id=YOUTUBE_CLIENT_ID,
-                                   client_secret=YOUTUBE_CLIENT_SECRET,
-                                   scope=cls.SCOPE,
-                                   redirect_uri=YOUTUBE_REDIRECT_URI
-                                   )
+        return OAuth2WebServerFlow(
+            client_id=YOUTUBE_CLIENT_ID,
+            client_secret=YOUTUBE_CLIENT_SECRET,
+            scope=cls.SCOPE,
+            redirect_uri=YOUTUBE_REDIRECT_URI
+        )
 
     @classmethod
     def get_auth_uri(cls, state=None):
@@ -268,7 +263,6 @@ class Youtube(ServiceBase):
         http_auth = self.credentials.authorize(httplib2.Http())
         return build(self.API_SERVICE_NAME, self.API_VERSION, http=http_auth)
 
-    @credentials_required
     def list_playlists(self):
         service = self.get_wrapped_service()
 
@@ -282,7 +276,6 @@ class Youtube(ServiceBase):
 
         return playlists
 
-    @credentials_required
     def create_playlist(self, playlist_name):
         service = self.get_wrapped_service()
 
@@ -306,7 +299,6 @@ class Youtube(ServiceBase):
 
         return True, pl_snippet
 
-    @credentials_required
     def list_tracks_in_playlist(self, playlist, track_id=None):
         service = self.get_wrapped_service()
 
@@ -334,7 +326,6 @@ class Youtube(ServiceBase):
 
         return tracks
 
-    @credentials_required
     def add_track_to_playlist_by_track_id(self, playlist, track_id):
         service = self.get_wrapped_service()
 
@@ -365,7 +356,6 @@ class Youtube(ServiceBase):
 
         return True, track_info, ''
 
-    @credentials_required
     def add_links_to_playlist(self, playlist, links):
         return_messages = []
 
@@ -383,7 +373,6 @@ class Youtube(ServiceBase):
 
         return return_messages
 
-    @credentials_required
     def get_track_info_from_link(self, link):
         service = self.get_wrapped_service()
         track_id = self.get_track_id(link)
@@ -400,9 +389,11 @@ class Youtube(ServiceBase):
             return None
 
         return TrackInfo(
-            raw_json=results['items'][0]['snippet'], name=results['items'][0]['snippet']['title'], track_id=track_id)
+            raw_json=results['items'][0]['snippet'],
+            name=results['items'][0]['snippet']['title'],
+            track_id=track_id
+        )
 
-    @credentials_required
     def search(self, search_string, **kwargs):
         service = self.get_wrapped_service()
         search_kwargs = {
@@ -434,7 +425,8 @@ class Youtube(ServiceBase):
         return TrackInfo(
             raw_json=best_result[0]['snippet'],
             name=best_result[0]['snippet']['title'],
-            track_id=best_result[0]['id']['videoId'])
+            track_id=best_result[0]['id']['videoId']
+        )
 
 
 class Spotify(ServiceBase):
@@ -444,27 +436,6 @@ class Spotify(ServiceBase):
     def __init__(self, *args, **kwargs):
         super(Spotify, self).__init__(*args, **kwargs)
         self.user_info = None
-
-    @classmethod
-    def get_flow(cls, state=None):
-        return SpotipyDBWrapper(
-            client_id=SPOTIFY_CLIENT_ID,
-            client_secret=SPOTIFY_CLIENT_SECRET,
-            redirect_uri=SPOTIFY_REDIRECT_URI,
-            scope=cls.SCOPE,
-            state=state,
-        )
-
-    @classmethod
-    def get_auth_uri(cls, state=None):
-        flow = cls.get_flow(state=state)
-        return flow.get_authorize_url()
-
-    @classmethod
-    def exchange(cls, code, state):
-        flow = cls.get_flow(state=state)
-        creds = flow.get_access_token(code=code)
-        return SimpleJSONWrapper(data_dict=creds)
 
     def get_track_id(self, link):
         if link.find('spotify:track') != -1:
@@ -482,7 +453,6 @@ class Spotify(ServiceBase):
         credentials_manager = SpotipyClientCredentialsManager(credentials=self.credentials)
         return Spotipy(client_credentials_manager=credentials_manager)
 
-    @credentials_required
     def get_user_info_from_spotify(self):
         if self.user_info:
             return self.user_info
@@ -496,7 +466,6 @@ class Spotify(ServiceBase):
 
         return self.user_info
 
-    @credentials_required
     def get_track_info(self, track_id):
         track_info = self.track_info.get(track_id, None)
         if track_info:
@@ -518,7 +487,6 @@ class Spotify(ServiceBase):
             artists=[a['name'] for a in track_info['artists']]
         )
 
-    @credentials_required
     def create_playlist(self, playlist_name):
         service = self.get_wrapped_service()
 
@@ -534,7 +502,6 @@ class Spotify(ServiceBase):
         playlist = service.user_playlist_create(user=spotify_user_id, name=playlist_name)
         return True, playlist
 
-    @credentials_required
     def list_playlists(self):
         service = self.get_wrapped_service()
 
@@ -551,7 +518,6 @@ class Spotify(ServiceBase):
 
         return playlists
 
-    @credentials_required
     def list_tracks_in_playlist(self, playlist):
         service = self.get_wrapped_service()
 
@@ -572,11 +538,9 @@ class Spotify(ServiceBase):
 
         return tracks
 
-    @credentials_required
     def get_track_info_from_link(self, link):
         return self.get_track_info(track_id=self.get_track_id(link))
 
-    @credentials_required
     def search(self, search_string, **kwargs):
         service = self.get_wrapped_service()
         search_kwargs = {
@@ -729,7 +693,6 @@ class Spotify(ServiceBase):
             track_id=winner['id']
         )
 
-    @credentials_required
     def add_track_to_playlist_by_track_id(self, playlist, track_id):
         service = self.get_wrapped_service()
 
@@ -756,7 +719,6 @@ class Spotify(ServiceBase):
 
         return True, track_info, ''
 
-    @credentials_required
     def add_links_to_playlist(self, playlist, links):
         return_messages = []
 
@@ -768,7 +730,3 @@ class Spotify(ServiceBase):
                 continue
 
         return return_messages
-
-
-class GMusic(ServiceBase):
-    pass

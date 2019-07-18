@@ -10,10 +10,10 @@ from functools import wraps
 from settings import BASE_URI, SLACK_CLIENT_ID, SLACK_CLIENT_SECRET, SLACK_OAUTH_TOKEN, SLACK_VERIFICATION_TOKEN
 
 from app import application
-from .constants import InvalidEnumException, MusicService, SlackUrl
+from .constants import InvalidEnumException, Platform, SlackUrl
 from .models import Credential, Playlist, User
 from .music_services import ServiceBase, TrackInfo
-from .tasks import add
+from .tasks import add_link_to_playlists
 from .utils import get_links, post_update_to_chat, add_link_to_playlists_from_event, add_manual_track_to_playlists
 
 
@@ -42,7 +42,7 @@ def index():
 
 @application.route('/oauthsuccess/<service_abbrv>')
 def oauthsuccess(service_abbrv):
-    service = MusicService.from_string(service_abbrv)
+    service = Platform.from_string(service_abbrv)
     return jsonify("Successfully authed with %s!" % service.name.title())
 
 
@@ -111,13 +111,13 @@ def credential_exchange(service_enum):
 # route used for youtube oauth flow
 @application.route('/youtubeoauth2callback')
 def youtubeoauth2callback():
-    return credential_exchange(service_enum=MusicService.YOUTUBE)
+    return credential_exchange(service_enum=Platform.YOUTUBE)
 
 
 # route used for spotify redirect
 @application.route('/spotifyoauth2callback')
 def spotifyoauth2callback():
-    return credential_exchange(service_enum=MusicService.SPOTIFY)
+    return credential_exchange(service_enum=Platform.SPOTIFY)
 
 
 @application.route('/list_playlists/', methods=['POST'])
@@ -148,14 +148,14 @@ def create_playlist():
 
     # defaults
     playlist_name = "%s_%s" % (channel_name, slack_user_name)
-    music_service_enum = MusicService.from_string('y')
+    music_service_enum = Platform.from_string('y')
     if command_text_args:
         args_len = len(command_text_args)
         if args_len > 0:
             playlist_name = command_text_args[0]
         if args_len > 1:
             try:
-                music_service_enum = MusicService.from_string(command_text_args[1])
+                music_service_enum = Platform.from_string(command_text_args[1])
             except InvalidEnumException:
                 pass
 
@@ -279,7 +279,7 @@ def delete_playlist():
 
     if len(command_text_args) > 1:
         service_name = command_text_args[1]
-        service_enum = MusicService.from_string(service_name)
+        service_enum = Platform.from_string(service_name)
         playlist_to_delete = [pl for pl in playlist_to_delete if pl.service is service_enum]
 
     if not playlist_to_delete:
@@ -339,10 +339,11 @@ def add_track():
 @application.route("/slack_events/", methods=['POST'])
 @verified_slack_request
 def slack_events():
+    # NOTE: always return a 200 to slack so it doesn't retry with a malformed message
     application.logger.info("Received event")
     if not request.data:
         application.logger.error("No request data sent to /slack_events")
-        return 400
+        return 200
 
     request_data_dict = json.loads(request.data.decode('utf-8'))
     if request_data_dict.get('challenge'):
@@ -351,16 +352,29 @@ def slack_events():
     event = request_data_dict.get('event')
     if not event:
         application.logger.error("Received event from slack with no event")
-        return "No event", 400
+        return "No event", 200
 
     if event.get('type') != 'link_shared':
         application.logger.info("Received event that was not link_shared")
         return "Ok", 200
+    
+    channel = event.get('channel')
+    if not channel:
+        application.logger.info("Received event with no channel")
+        return "Ok", 200
+    
+    application.logger.info("%s action received in channel %s" % (event.get('type'), channel))
 
-    # start thread to do this because slack requires a fast response and checking for dupes takes time
-    t = Thread(
-        target=add_link_to_playlists_from_event,
-        args=(event, ))
-    t.start()
+    links = event.get('links')
+    if not links:
+        application.logger.error("No links in event")
+        return "OK", 200
+
+    playlists_in_channel = Playlist.query.filter_by(channel_id=channel).all()
+    if not playlists_in_channel:
+        return "Ok", 200
+
+    for link in links:
+        add_link_to_playlists.delay(link=link, playlists=playlists_in_channel, channel=channel)
 
     return "Ok", 200

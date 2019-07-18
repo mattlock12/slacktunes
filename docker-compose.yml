@@ -32,5 +32,5 @@ services:
       - redis
     tty: true
     ports:
-      - 8000:8000
-    command: [ "gunicorn", "-b", "0.0.0.0:8000", "application:application" ]
+      - 8080:8080
+    command: [ "gunicorn", "-b", "0.0.0.0:8080", "application:application" ]

@@ -10,6 +10,7 @@ SLACK_CLIENT_SECRET = os.environ.get('SLACK_CLIENT_SECRET', None)
 SLACK_OAUTH_TOKEN = os.environ.get('SLACK_OAUTH_TOKEN', None)
 SLACK_VERIFICATION_TOKEN = os.environ.get('SLACK_VERIFICATION_TOKEN', None)
 SERVICE_SLACK_ID = ''
+SERVICE_SLACK_USER_NAME = '___serviceslackuser'
 
 SLACKTUNES_USER_ID = ''
 
@@ -35,3 +36,6 @@ DB_URI = PSQL_DB_FORMAT.format(
     port=PSQL_PORT,
     db=PSQL_DBNAME
 )
+
+REDIS_HOST = 'redis'
+REDIS_PORT = 6379

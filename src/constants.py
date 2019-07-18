@@ -1,6 +1,9 @@
 from enum import Enum
 
 
+DUPLICATE_TRACK = "Already in playlist"
+
+
 class InvalidEnumException(Exception):
     pass
 
@@ -12,7 +15,7 @@ class SlackUrl(Enum):
     OUATH_ACCESS = 'https://slack.com/api/oauth.access'
 
 
-class MusicService(Enum):
+class Platform(Enum):
     YOUTUBE = 'Youtube'
     SPOTIFY = 'Spotify'
 
@@ -35,4 +38,18 @@ class MusicService(Enum):
             return None
 
 
-BAD_WORDS = ['EP', 'Full', 'Official', 'Lyrics', 'Lyric', 'Video', 'Album', 'HD', 'SD', 'HQ', 'by', 'single', 'version']
+BAD_WORDS = [
+    'EP',
+    'Full',
+    'Official',
+    'Lyrics',
+    'Lyric',
+    'Video',
+    'Album',
+    'HD',
+    'SD',
+    'HQ',
+    'by',
+    'single',
+    'version',
+]
