@@ -11,7 +11,7 @@ from spotipy.client import SpotifyException
 
 from settings import YOUTUBE_CLIENT_ID, YOUTUBE_CLIENT_SECRET, YOUTUBE_REDIRECT_URI, SPOTIFY_CLIENT_ID, SPOTIFY_CLIENT_SECRET, SPOTIFY_REDIRECT_URI
 
-from .constants import BAD_WORDS, InvalidEnumException, MusicService
+from .constants import BAD_WORDS, InvalidEnumException, Platform
 from .oauth_wrappers import SpotipyClientCredentialsManager, SpotipyDBWrapper
 
 
@@ -125,9 +125,9 @@ class ServiceBase(object):
 
     @classmethod
     def from_enum(cls, enum):
-        if enum is MusicService.YOUTUBE:
+        if enum is Platform.YOUTUBE:
             return Youtube
-        elif enum is MusicService.SPOTIFY:
+        elif enum is Platform.SPOTIFY:
             return Spotify
         else:
             raise InvalidEnumException
@@ -148,7 +148,7 @@ class ServiceBase(object):
     @credentials_required
     def add_link_to_playlist(self, playlist, link):
         # should never happen but this is not how to handle it anyway
-        if not self.is_same_service_link(link):
+        if not self.is_same_platform_link(link):
             return False, None, ""
 
         track_id = self.get_track_id(link)
@@ -178,7 +178,7 @@ class ServiceBase(object):
         ti = TrackInfo(name=track_name, artists=artist)
         native_track_info = self.get_native_track_info_from_track_info(
             track_info=ti,
-            is_spotify=playlist.service == MusicService.SPOTIFY
+            is_spotify=playlist.platform == Platform.SPOTIFY
         )
         if not native_track_info:
             return False, None, 'No track info found'
@@ -226,7 +226,7 @@ class Youtube(ServiceBase):
             },
         }
 
-    def is_same_service_link(self, link):
+    def is_same_platform_link(self, link):
         return 'yout' in link
 
     def get_track_id(self, link):
@@ -299,7 +299,7 @@ class Youtube(ServiceBase):
 
         list_kwargs = {
             'part': 'snippet',
-            'playlistId': playlist.service_id,
+            'playlistId': playlist.platform_id,
             'maxResults': 50
         }
         if track_id:
@@ -326,7 +326,7 @@ class Youtube(ServiceBase):
         service = self.get_wrapped_service()
 
         # optimization for multiple adds
-        cached_tracks = self.tracks_in_playlist.get(playlist.service_id)
+        cached_tracks = self.tracks_in_playlist.get(playlist.platform_id)
         if cached_tracks and track_id in set(ct.track_id for ct in cached_tracks):
             return False, [t for t in cached_tracks if t.track_id == track_id][0], "Already in playlist"
 
@@ -338,7 +338,7 @@ class Youtube(ServiceBase):
         resource_body = {
             'kind': 'youtube#playlistItem',
             'snippet': {
-                'playlistId': playlist.service_id,
+                'playlistId': playlist.platform_id,
                 'resourceId': {
                     'kind': 'youtube#video',
                     'videoId': track_id,
@@ -359,7 +359,7 @@ class Youtube(ServiceBase):
         # let's say a large playlist is ~1000 songs; get a list of all tracks in playlist if it'll take more than
         # 10 individual calls to get a list of all track_ids
         if len(links) > 10:
-            self.tracks_in_playlist[playlist.service_id] = self.list_tracks_in_playlist(playlist=playlist)
+            self.tracks_in_playlist[playlist.platform_id] = self.list_tracks_in_playlist(playlist=playlist)
 
         for link in links:
             if 'yout' in link:
@@ -458,7 +458,7 @@ class Spotify(ServiceBase):
 
         return link.split('/')[-1].split('?')[0]
 
-    def is_same_service_link(self, link):
+    def is_same_platform_link(self, link):
         return 'spotify' in link
 
     @credentials_required
@@ -542,7 +542,7 @@ class Spotify(ServiceBase):
         service = self.get_wrapped_service()
 
         tracks_request = service.user_playlist_tracks(user=self.get_user_info_from_spotify()['id'],
-                                                      playlist_id=playlist.service_id)
+                                                      playlist_id=playlist.platform_id)
         tracks = []
         while tracks_request:
             tracks += [
@@ -719,9 +719,9 @@ class Spotify(ServiceBase):
     def add_track_to_playlist_by_track_id(self, playlist, track_id):
         service = self.get_wrapped_service()
 
-        existing_tracks = self.tracks_in_playlist.get(playlist.service_id, None)
+        existing_tracks = self.tracks_in_playlist.get(playlist.platform_id, None)
         if not existing_tracks:
-            existing_tracks = self.tracks_in_playlist[playlist.service_id] = self.list_tracks_in_playlist(playlist)
+            existing_tracks = self.tracks_in_playlist[playlist.platform_id] = self.list_tracks_in_playlist(playlist)
 
         existing_track_ids = set(t.track_id for t in existing_tracks)
         if track_id in existing_track_ids:
@@ -729,7 +729,7 @@ class Spotify(ServiceBase):
 
         try:
             resp = service.user_playlist_add_tracks(user=self.get_user_info_from_spotify()['id'],
-                                                    playlist_id=playlist.service_id,
+                                                    playlist_id=playlist.platform_id,
                                                     tracks=[track_id])
         except SpotifyException as e:
             return False, None, e
@@ -738,7 +738,7 @@ class Spotify(ServiceBase):
         if not resp['snapshot_id']:
             return False, None, "Unable to add %s to %s" % (track_info['name'], playlist.name)
 
-        self.tracks_in_playlist[playlist.service_id].append(track_info)
+        self.tracks_in_playlist[playlist.platform_id].append(track_info)
 
         return True, track_info, ''
 

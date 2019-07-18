@@ -12,7 +12,7 @@ class SlackUrl(Enum):
     OUATH_ACCESS = 'https://slack.com/api/oauth.access'
 
 
-class MusicService(Enum):
+class Platform(Enum):
     YOUTUBE = 'Youtube'
     SPOTIFY = 'Spotify'
 

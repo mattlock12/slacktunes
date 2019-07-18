@@ -5,7 +5,7 @@ from oauth2client.client import OAuth2Credentials
 from sqlalchemy import UniqueConstraint
 
 from app import db
-from .constants import MusicService
+from .constants import Platform
 
 
 def now():
@@ -29,19 +29,19 @@ class Playlist(db.Model, BaseModelMixin):
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(100))
     channel_id = db.Column(db.String(100))
-    service = db.Column(db.Enum(MusicService))
-    service_id = db.Column(db.String(100))
+    platform = db.Column(db.Enum(Platform))
+    platform_id = db.Column(db.String(100))
     # relations
     user_id = db.Column(db.Integer, db.ForeignKey('user.id'))
     user = db.relationship('User', backref=db.backref('playlists', lazy='dynamic'))
 
-    __table_args__ = (UniqueConstraint('service', 'service_id', name='_service_serviceid_constraint'),)
+    __table_args__ = (UniqueConstraint('platform', 'platform_id', name='_platform_platformid_constraint'),)
 
-    def __init__(self, name, channel_id, service, service_id, user_id):
+    def __init__(self, name, channel_id, platform, platform_id, user_id):
         self.name = name
         self.channel_id = channel_id
-        self.service = service
-        self.service_id = service_id
+        self.platform = platform
+        self.platform_id = platform_id
         self.user_id = user_id
 
 
@@ -56,32 +56,32 @@ class User(db.Model, BaseModelMixin):
         self.name = name
         self.slack_id = slack_id
 
-    def credentials_for_service(self, service):
-        service_creds = [c for c in self.credentials if c.service is service]
-        if not service_creds:
+    def credentials_for_platform(self, platform):
+        platform_creds = [c for c in self.credentials if c.platform is platform]
+        if not platform_creds:
             return None
-        if len(service_creds) > 1:
+        if len(platform_creds) > 1:
             # TODO: what do here?
             pass
-        return service_creds[0].to_oauth2_creds()
+        return platform_creds[0].to_oauth2_creds()
 
 
 class Credential(db.Model, BaseModelMixin):
     id = db.Column(db.Integer, primary_key=True)
     user_id = db.Column(db.Integer, db.ForeignKey('user.id'), index=True)
-    service = db.Column(db.Enum(MusicService))
+    platform = db.Column(db.Enum(Platform))
     credentials = db.Column(db.String(5000))
 
-    __table_args__ = (UniqueConstraint('user_id', 'service', name='_user_service_constraint'),)
+    __table_args__ = (UniqueConstraint('user_id', 'platform', name='_user_platform_constraint'),)
 
-    def __init__(self, user_id, service, credentials):
+    def __init__(self, user_id, platform, credentials):
         self.user_id = user_id
-        self.service = service
+        self.platform = platform
         self.credentials = credentials
 
     def to_oauth2_creds(self):
-        if self.service is MusicService.YOUTUBE:
+        if self.platform is Platform.YOUTUBE:
             return OAuth2Credentials.from_json(self.credentials)
-        elif self.service is MusicService.SPOTIFY:
+        elif self.platform is Platform.SPOTIFY:
             return json.loads(self.credentials)
 

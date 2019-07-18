@@ -88,7 +88,7 @@ for example:
 Command: /create_playlist
 Request URL: <ngrok_url>/create_playlist/
 ```
-* create_playlist <playlist_name> <service>
+* create_playlist <playlist_name> <platform>
 * scrape_music <playlist_name>
 * list_playlist
 * delete_playlist

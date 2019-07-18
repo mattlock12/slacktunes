@@ -3,7 +3,7 @@ import time
 
 from spotipy import oauth2
 
-from .constants import MusicService
+from .constants import Platform
 from .models import User
 
 from settings import SPOTIFY_CLIENT_ID, SPOTIFY_CLIENT_SECRET, SPOTIFY_REDIRECT_URI
@@ -27,7 +27,7 @@ class SpotipyClientCredentialsManager(object):
             refresh_credentials = spotify_oauth.refresh_access_token(self.credentials['refresh_token'])
             slack_id, slack_user_name = self.credentials['userdata'].split(':')
             user = User.query.filter_by(slack_id=slack_id).first()
-            creds = [creds for creds in user.credentials if creds.service is MusicService.SPOTIFY][0]
+            creds = [creds for creds in user.credentials if creds.platform is Platform.SPOTIFY][0]
             old_creds = creds.to_oauth2_creds()
             old_creds.update(refresh_credentials)
             creds.credentials = json.dumps(old_creds)

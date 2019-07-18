@@ -1,8 +1,8 @@
 import requests
 
-from .constants import SlackUrl
+from .constants import Platform, SlackUrl
 from .models import Credential, Playlist, User
-from .music_services import ServiceBase, MusicService
+from .music_services import ServiceBase, Platform
 
 from application import application
 from settings import SLACK_OAUTH_TOKEN
@@ -25,7 +25,7 @@ def post_update_to_chat(payload):
     return res.text, res.status_code
 
 
-def add_manual_track_to_playlists(track_info, channel_id, playlist_name=None, service_str=None):
+def add_manual_track_to_playlists(track_info, channel_id, playlist_name=None, platform_str=None):
     with application.app_context():
         playlists = Playlist.query.filter_by(channel_id=channel_id)
 
@@ -35,28 +35,28 @@ def add_manual_track_to_playlists(track_info, channel_id, playlist_name=None, se
         if playlist_name:
             playlists = playlists.filter_by(name=playlist_name)
 
-        if service_str:
-            playlists = playlists.filter_by(service=MusicService.from_string(service_str))
+        if platform_str:
+            playlists = playlists.filter_by(platform=Platform.from_string(platform_str))
 
         if not playlists:
             return "No %splaylists found with name %s" % (
-                "%s " % MusicService.from_string(service_str).name.lower() if service_str else '',
+                "%s " % Platform.from_string(platform_str).name.lower() if platform_str else '',
                 playlist_name
             ), 200
 
         successes = []
         failures = []
         for pl in playlists:
-            success, _, error_msg = ServiceBase.from_enum(pl.service)(
-                credentials=pl.user.credentials_for_service(pl.service)).add_manual_track_to_playlist(
+            success, _, error_msg = ServiceBase.from_enum(pl.platform)(
+                credentials=pl.user.credentials_for_platform(pl.platform)).add_manual_track_to_playlist(
                 playlist=pl,
                 track_name=track_info.name,
                 artist=track_info.artists)
 
             if success:
-                successes.append("%s (%s)" % (pl.name, pl.service.name.title()))
+                successes.append("%s (%s)" % (pl.name, pl.platform.name.title()))
             else:
-                failures.append("%s (%s) - %s" % (pl.name, pl.service.name.title(), error_msg))
+                failures.append("%s (%s) - %s" % (pl.name, pl.platform.name.title(), error_msg))
 
         post_messages_after_link_shared(
             native_track_info=track_info,
@@ -79,7 +79,7 @@ def add_link_to_playlists_from_event(event):
             return "No link", 400
 
         link = links[0]['url']
-        link_service = MusicService.from_link(link=link)
+        link_platform = Platform.from_link(link=link)
 
         playlists_in_channel = Playlist.query.filter_by(channel_id=channel).all()
         if not playlists_in_channel:
@@ -94,20 +94,20 @@ def add_link_to_playlists_from_event(event):
         native_track_info = None
         cs_track_info = None
 
-        native_playlists = [pl for pl in playlists_in_channel if pl.service is link_service]
-        cross_service_playlists = [cpl for cpl in playlists_in_channel if cpl.service is not link_service]
+        native_playlists = [pl for pl in playlists_in_channel if pl.platform is link_platform]
+        cross_service_playlists = [cpl for cpl in playlists_in_channel if cpl.platform is not link_platform]
 
         # add to native playlists first, to get track info
         for pl in native_playlists:
-            credentials = pl.user.credentials_for_service(pl.service)
-            music_service = ServiceBase.from_enum(pl.service)(credentials=credentials)
+            credentials = pl.user.credentials_for_platform(pl.platform)
+            music_service = ServiceBase.from_enum(pl.platform)(credentials=credentials)
             success, track_info, message = music_service.add_link_to_playlist(pl, link)
 
             if success:
                 native_track_info = track_info
-                native_successes.append("%s (%s)" % (pl.name, pl.service.name.title()))
+                native_successes.append("%s (%s)" % (pl.name, pl.platform.name.title()))
             else:
-                native_failures.append("%s (%s) - %s" % (pl.name, pl.service.name.title(), message))
+                native_failures.append("%s (%s) - %s" % (pl.name, pl.platform.name.title(), message))
 
         # it's possible that there are no native playlists in the channel
         if not native_track_info:
@@ -116,13 +116,13 @@ def add_link_to_playlists_from_event(event):
             user = User.query.filter_by(slack_id=event.get('user')).first()
             if not user:
                 user = User.query.filter_by(slack_id=SLACKTUNES_USER_ID)
-            native_creds = user.credentials_for_service(service=link_service)
+            native_creds = user.credentials_for_platform(platform=link_platform)
             if not native_creds:
                 cs_failures.append(
                     "No users have authorized %s in this channel, "
                     "so cross platform sharing won't work."
-                    " %s should probably run /authorize <service_name> to fix this" %
-                    (link_service.name.title(), user.name)
+                    " %s should probably run /authorize <platform_name> to fix this" %
+                    (link_platform.name.title(), user.name)
                 )
 
                 return post_messages_after_link_shared(
@@ -135,7 +135,7 @@ def add_link_to_playlists_from_event(event):
                     cs_failures=cs_failures
                 )
 
-            native_service = ServiceBase.from_enum(link_service)(credentials=native_creds)
+            native_service = ServiceBase.from_enum(link_platform)(credentials=native_creds)
             native_track_info = native_service.get_track_info_from_link(link)
 
         # still can't get track info? Sucks, bro
@@ -155,12 +155,12 @@ def add_link_to_playlists_from_event(event):
         # TODO: there are only 2 services now, so this works. But there may be more in the future
         cs_track_info = None
         for cpl in cross_service_playlists:
-            cs_credentials = cpl.user.credentials_for_service(cpl.service)
-            cs_music_service = ServiceBase.from_enum(cpl.service)(credentials=cs_credentials)
+            cs_credentials = cpl.user.credentials_for_platform(cpl.platform)
+            cs_music_service = ServiceBase.from_enum(cpl.platform)(credentials=cs_credentials)
             cs_track_info = cs_music_service.get_native_track_info_from_track_info(native_track_info)
 
             if not cs_track_info:
-                cs_failures.append('Unable to find %s info for track %s' % (cpl.service.name.title(), native_track_info.get_track_name()))
+                cs_failures.append('Unable to find %s info for track %s' % (cpl.platform.name.title(), native_track_info.get_track_name()))
                 return post_messages_after_link_shared(
                     native_track_info=native_track_info,
                     cs_track_info=cs_track_info,
@@ -174,9 +174,9 @@ def add_link_to_playlists_from_event(event):
             success, _, message = cs_music_service.add_track_to_playlist_by_track_id(cpl, cs_track_info.track_id)
 
             if success:
-                cs_successes.append("%s (%s)" % (cpl.name, cpl.service.name.title()))
+                cs_successes.append("%s (%s)" % (cpl.name, cpl.platform.name.title()))
             else:
-                cs_failures.append("%s (%s) - %s" % (cpl.name, cpl.service.name.title(), message))
+                cs_failures.append("%s (%s) - %s" % (cpl.name, cpl.platform.name.title(), message))
 
         post_messages_after_link_shared(
             native_track_info=native_track_info,
