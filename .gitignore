@@ -19,3 +19,6 @@ credentials*json
 
 # log
 *slacktunes.log
+
+#tests
+test.db
