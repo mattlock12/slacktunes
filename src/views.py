@@ -1,6 +1,4 @@
 import json
-from logging.handlers import RotatingFileHandler
-from threading import Thread
 
 import requests
 from flask import render_template, jsonify, redirect, request, url_for
@@ -9,7 +7,7 @@ from functools import wraps
 
 from settings import BASE_URI, SLACK_CLIENT_ID, SLACK_CLIENT_SECRET, SLACK_OAUTH_TOKEN, SLACK_VERIFICATION_TOKEN
 
-from app import application
+from app import application, logger
 from .constants import InvalidEnumException, Platform, SlackUrl
 from .models import Credential, Playlist, User
 from .music_services import ServiceBase, TrackInfo
@@ -89,7 +87,7 @@ def credential_exchange(platform_enum):
         return "No userdata to associate", 400
 
     credentials = service.exchange(code=code, state=state)
-    application.logger.info("Successfully got credentials from %s" % platform_enum.name.title())
+    logger.info("Successfully got credentials from %s" % platform_enum.name.title())
 
     user = User.query.filter_by(slack_id=slack_user_id).first()
     if not user:
@@ -322,16 +320,13 @@ def add_track():
     if command_text_args:
         platform_str = command_text_args.pop(0).strip()
 
-    # start thread to do this because slack requires a fast response and checking for dupes takes time
-    t = Thread(
-        target=add_manual_track_to_playlists,
-        kwargs={
-            'track_info': TrackInfo(name=track_name, artists=artist),
-            'channel_id': channel_id,
-            'playlist_name': playlist_name,
-            'platform_str': platform_str
-        })
-    t.start()
+    # CELERY
+    add_manual_track_to_playlists(
+        track_info=TrackInfo(name=track_name, artists=artist, platform=Platform.YOUTUBE), # FIXME
+        channel_id=channel_id,
+        playlist_name=playlist_name,
+        platform_str=platform_str
+    )
 
     return '', 200
 
@@ -340,9 +335,9 @@ def add_track():
 @application.route("/slack_events/", methods=['POST'])
 @verified_slack_request
 def slack_events():
-    application.logger.info("Received event")
+    logger.info("Received event")
     if not request.data:
-        application.logger.error("No request data sent to /slack_events")
+        logger.error("No request data sent to /slack_events")
         return 400
 
     request_data_dict = json.loads(request.data.decode('utf-8'))
@@ -351,17 +346,14 @@ def slack_events():
 
     event = request_data_dict.get('event')
     if not event:
-        application.logger.error("Received event from slack with no event")
+        logger.error("Received event from slack with no event")
         return "No event", 400
 
     if event.get('type') != 'link_shared':
-        application.logger.info("Received event that was not link_shared")
+        logger.info("Received event that was not link_shared")
         return "Ok", 200
 
-    # start thread to do this because slack requires a fast response and checking for dupes takes time
-    t = Thread(
-        target=add_link_to_playlists_from_event,
-        args=(event, ))
-    t.start()
+    # CELERY
+    add_link_to_playlists_from_event(event)
 
     return "Ok", 200
