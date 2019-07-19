@@ -10,6 +10,7 @@ from oauth2client.client import OAuth2WebServerFlow
 from spotipy import Spotify as Spotipy
 from spotipy.client import SpotifyException
 
+from app import logger
 from .constants import BAD_WORDS, DUPLICATE_TRACK, InvalidEnumException, Platform
 from .oauth_wrappers import SpotipyClientCredentialsManager, SpotipyDBWrapper
 from settings import (
@@ -21,6 +22,9 @@ from settings import (
     YOUTUBE_CLIENT_SECRET
 )
 
+YOUTUBE_TOKEN_SET_THRESHHOLD = 85
+SPOTIFY_TOKEN_SET_THRESHHOLD = 75
+SPOTIFY_TOKEN_SORT_THRESHHOLD = 65
 
 class NoCredentialsError(Exception):
     pass
@@ -208,6 +212,10 @@ class ServiceBase(object, metaclass=abc.ABCMeta):
         raise NotImplementedError()
 
     @abc.abstractmethod
+    def list_playlists(self, *args, **kwargs):
+        raise NotImplementedError()
+
+    @abc.abstractmethod
     def create_playlist(self, playlist_name):
         raise NotImplementedError()
 
@@ -356,7 +364,7 @@ class YoutubeService(ServiceBase):
         best_result = (None, 0)
         for item in items:
             contender = fuzz.token_set_ratio(track_info.track_name_for_comparison(), item['snippet']['title'])
-            if contender > best_result[1] and contender > 85:
+            if contender > best_result[1] and contender > YOUTUBE_TOKEN_SET_THRESHHOLD:
                 best_result = (item, contender)
 
         if not best_result[0]:
@@ -369,8 +377,52 @@ class YoutubeService(ServiceBase):
             raw_json=best_result[0]['snippet']
         )
 
+    def list_playlists(self):
+        client = self.get_wrapped_client()
+
+        playlists = []
+        playlists_request = client.playlists().list(part='snippet', mine=True, maxResults=50)
+        while playlists_request:
+            playlists_response = playlists_request.execute()
+            for pl in playlists_response['items']:
+                playlists.append(pl)
+            playlists_request = client.playlists().list_next(playlists_request, playlists_response)
+
+        return playlists
+    
     def create_playlist(self, playlist_name):
-        raise NotImplementedError()
+        client = self.get_wrapped_client()
+
+        channels_response = client.channels().list(part='id', mine=True).execute()
+        if not channels_response or not channels_response['items']:
+            # TODO: figure out error handling
+            return False, "No channels"
+
+        channel_id = channels_response['items'][0]['id']
+
+        for pl in self.list_playlists():
+            if pl['snippet']['title'] == playlist_name:
+                return True, pl
+
+        pl_body = {
+            "status": {
+                "privacyStatus": "Public",
+            },
+            "kind": "youtube#playlist",
+            "snippet": {
+                "description": "slacktunes created playlist! Check out https://slacktunes.me",
+                "tags": ["slacktunes", ],
+                "channelId": channel_id,
+                "title": playlist_name,
+                },
+        }
+
+        try:
+            pl_snippet = client.playlists().insert(body=pl_body, part='snippet, status').execute()
+        except Exception as e:
+            return False, e
+
+        return True, pl_snippet
 
 
 class SpotifyService(ServiceBase):
@@ -378,7 +430,7 @@ class SpotifyService(ServiceBase):
     NAME = 'Spotify'
 
     def __init__(self, *args, **kwargs):
-        user_info = kwargs.pop('user_info')
+        user_info = kwargs.pop('user_info', None)
         
         super(SpotifyService, self).__init__(*args, **kwargs)
 
@@ -436,18 +488,22 @@ class SpotifyService(ServiceBase):
             track_id = link.split('/')[-1].split('?')[0]
 
         client = self.get_wrapped_client()
+
         try:
-            track_info = client.track(track_id=track_id)['tracks'][0]
+            resp = client.track(track_id=track_id)
         except Exception as e:
             # TODO: better error handling
+            logger.error("Failed to get Spotify track from track id: %s" % str(e))
             return None
+
+        # TODO: what to do if it finds nothing?
 
         return TrackInfo(
             track_id=track_id,
-            name=track_info['name'],
+            name=resp['name'],
             platform=Platform.SPOTIFY,
-            raw_json=track_info,
-            artists=[a['name'] for a in track_info['artists']]
+            raw_json=resp,
+            artists=[a['name'] for a in resp['artists']]
         )
     
     def get_track_ids_in_playlist(self, playlist, track_id=None):
@@ -476,17 +532,17 @@ class SpotifyService(ServiceBase):
         try:
             resp = client.user_playlist_add_tracks(
                 user=self.get_user_info()['id'],
-                playlist_id=playlist.client_id,
+                playlist_id=playlist.platform_id,
                 tracks=[track_info.track_id]
             )
         except SpotifyException as e:
-            return False, e
+            return False, e.msg
         except Exception as e:
             # TODO: better error handling
-            return False, e
+            return False, str(e)
 
-        if not resp['snapshot_id']:
-            return False, "Unable to add %s to %s" % (track_info['name'], playlist.name)
+        if not resp.get('snapshot_id'):
+            return False, "Unable to add %s to %s" % (track_info.name, playlist.name)
 
         return True, None
     
@@ -502,7 +558,12 @@ class SpotifyService(ServiceBase):
         if track_info.platform is Platform.SPOTIFY:
             search_string += " artist:%s" % track_info.artists_for_search()
         
-        results = client.search(q=search_string, **search_kwargs)
+        try:
+            results = client.search(q=search_string, **search_kwargs)
+        except Exception as e:
+            logger.error(e)
+            return None
+
         if not results:
             return None
         if not results.get('tracks', {}).get('items'):
@@ -523,7 +584,7 @@ class SpotifyService(ServiceBase):
             contender_artist = " ".join(a['name'] for a in item['artists'])
             # using set
             contender = fuzz.token_set_ratio(target.lower(), ("%s %s" % (contender_name, contender_artist)).lower())
-            if contender >= best_score_so_far and contender > 75:
+            if contender >= best_score_so_far and contender > SPOTIFY_TOKEN_SET_THRESHHOLD:
                 best_score_so_far = contender
                 contenders.append(item)
 
@@ -554,7 +615,7 @@ class SpotifyService(ServiceBase):
             # using sort
             sort_score = fuzz.token_sort_ratio(
                 target.lower(), ("%s %s" % (contender_name, contender_artist)).lower())
-            if sort_score >= best_sort_score_so_far and sort_score > 65:
+            if sort_score >= best_sort_score_so_far and sort_score > SPOTIFY_TOKEN_SORT_THRESHHOLD:
                 contender['sort_score'] = sort_score
                 best_sort_score_so_far = sort_score
                 sort_contenders.append(contender)
@@ -631,6 +692,39 @@ class SpotifyService(ServiceBase):
             platform=Platform.SPOTIFY
         )
 
+    def list_playlists(self):
+        client = self.get_wrapped_client()
 
+        spotify_user_info = self.get_user_info()
+        if not spotify_user_info:
+            return []
+
+        spotify_user_id = spotify_user_info['id']
+        playlist_results = client.user_playlists(user=spotify_user_id)
+        playlists = []
+        while playlist_results:
+            playlists.extend(playlist_results['items'])
+            playlist_results = client.next(playlist_results)
+
+        return playlists
+    
     def create_playlist(self, playlist_name):
-        raise NotImplementedError()
+        client = self.get_wrapped_client()
+
+        spotify_user_info = self.get_user_info()
+        if not spotify_user_info:
+            return False, "Could not find info for this user"
+
+        spotify_user_id = spotify_user_info['id']
+        for pl in self.list_playlists():
+            if pl['name'] == playlist_name:
+                return True, pl
+
+        try:
+            playlist = client.user_playlist_create(user=spotify_user_id, name=playlist_name)
+        except Exception as e:
+            logger.error(e)
+            return False, str(e)
+
+        return True, playlist
+
