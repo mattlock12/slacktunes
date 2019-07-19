@@ -1,6 +1,8 @@
 from enum import Enum
 
 
+DUPLICATE_TRACK = "Duplicate"
+
 class InvalidEnumException(Exception):
     pass
 

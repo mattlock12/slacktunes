@@ -16,8 +16,6 @@ from settings import (
     SPOTIFY_CLIENT_ID,
     SPOTIFY_CLIENT_SECRET,
     SPOTIFY_REDIRECT_URI,
-    REDIS_HOST,
-    REDIS_PORT,
     YOUTUBE_REDIRECT_URI,
     YOUTUBE_CLIENT_ID,
     YOUTUBE_CLIENT_SECRET
@@ -256,7 +254,12 @@ class YoutubeService(ServiceBase):
             return False
         
         video_id = None
-        if "v=" not in link:
+        if "v=" in link:
+            link.split('?')
+            for param in link.split('&'):
+                if 'v=' in param:
+                    video_id = param.split('=')[1]
+        else:
             # mobile video share
             # TODO: what is all this dumbass link splitting?
             link_parts = link.split()
@@ -265,18 +268,12 @@ class YoutubeService(ServiceBase):
                 return None
             video_id = link[0].split('be/')[1]
 
-        link.split('?')
-        for param in link.split('&'):
-            if 'v=' in param:
-                video_id = param.split('=')[1]
-                break
-        
         client = self.get_wrapped_client()
         resp = client.videos().list(part='snippet', id=video_id)
         items = resp.get('items', {})
-        if len(items) > 1:
+        if not items or len(items) > 1:
             # TODO: what do here?
-            return None
+            return False
         
         track = items[0]
         
@@ -292,7 +289,7 @@ class YoutubeService(ServiceBase):
 
         list_kwargs = {
             'part': 'id',
-            'playlistId': playlist.client_id,
+            'playlistId': playlist.platform_id,
             'maxResults': 50
         }
         if track_id:
@@ -311,7 +308,7 @@ class YoutubeService(ServiceBase):
         return track_ids
 
     def is_track_in_playlist(self, track_info, playlist):
-        return track_info.track_id in self.get_track_ids_in_playlist(playlist=playist, track_id=track_info.track_id)
+        return track_info.track_id in self.get_track_ids_in_playlist(playlist=playlist, track_id=track_info.track_id)
     
     def add_track_to_playlist(self, track_info, playlist):
         client = self.get_wrapped_client()
@@ -334,7 +331,7 @@ class YoutubeService(ServiceBase):
             resp = client.playlistItems().insert(part='snippet', body=resource_body).execute()
         except Exception as e:
             # TODO: better exception handling
-            return False, e
+            return False, str(e)
         
         return True, None
     
@@ -345,20 +342,20 @@ class YoutubeService(ServiceBase):
             'maxResults': 10,
             'type': 'video'
         }
-        
+
         try:
             search_results = client.search().list(q=track_info.get_track_name(), **search_kwargs).execute()
         except Exception as e:
             # TODO: better exception handling
             return None
-        
+
         items = search_results.get('items', None)
         if not items:
             return None
 
         best_result = (None, 0)
         for item in items:
-            contender = fuzz.token_set_ratio(track_info.get_track_name(), item['snippet']['title'])
+            contender = fuzz.token_set_ratio(track_info.track_name_for_comparison(), item['snippet']['title'])
             if contender > best_result[1] and contender > 85:
                 best_result = (item, contender)
 

@@ -1,4 +1,4 @@
-from json_fakes import (
+from .json_fakes import (
     SPOTIFY_ADD_TRACK_RESPONSE,
     SPOTIFY_PLAYLIST_TRACKS_RESP,
     SPOTIFY_SEARCH_RESULTS,
@@ -15,9 +15,8 @@ class FakeYoutubeClient(object):
     def __init__(self, *args, **kwargs):
         expected_responses = kwargs.pop('expected_responses', {})
 
-        super(FakeYoutubeClient, self).__init__(*args, **kwargs)
-
         self.expected_responses = expected_responses
+        self.insert_calls = []
 
     def videos(self):
         expected_response = self.expected_responses.get('videos_list')
@@ -26,6 +25,9 @@ class FakeYoutubeClient(object):
             @classmethod
             def list(cls, part, id, *args, **kwargs):
                 if expected_response:
+                    # might be an exception
+                    if callable(expected_response):
+                        expected_response()
                     return expected_response
                 
                 return YOUTUBE_VIDEOS_LIST_SINGLE_RESPONSE
@@ -40,17 +42,26 @@ class FakeYoutubeClient(object):
         class FakePlaylistItems(object):
             @classmethod
             def list(cls, **kwargs):
-                if expected_list_response:
-                    return expected_list_response
+                class FakeExecutor(object):
+                    @classmethod
+                    def execute(kls):
+                        if expected_list_response:
+                            if callable(expected_list_response):
+                                expected_list_response()
+                            return expected_list_response
+                        
+                        return YOUTUBE_PLAYLIST_ITEMS_LIST_RESPONSE
                 
-                return YOUTUBE_PLAYLIST_ITEMS_LIST_RESPONSE
+                return FakeExecutor
 
             @classmethod
             def list_next(cls, playlist_items_list_request, playlist_items_list_response):
                 if expected_next_response:
+                    if callable(expected_next_response):
+                        expected_next_response()
                     return expected_next_response
                 
-                # Pretend we never get paginated results
+                # let's pretend we never get paginated responses
                 return None
 
             @classmethod
@@ -58,7 +69,11 @@ class FakeYoutubeClient(object):
                 class FakeExecutor(object):
                     @classmethod
                     def execute(kls):
+                        self.insert_calls.append(body)
+
                         if expected_insert_response:
+                            if callable(expected_insert_response):
+                                expected_insert_response()
                             return expected_insert_response
 
                         # We don't check for any response except an error
@@ -74,10 +89,17 @@ class FakeYoutubeClient(object):
         class FakeSearch(object):
             @classmethod
             def list(cls, q, **kwargs):
-                if expected_search_response:
-                    return expected_search_response
-                
-                return YOTUBE_SEARCH_LIST_RESPONSE
+                class FakeExecutor(object):
+                    @classmethod
+                    def execute(cls):
+                        if expected_search_response:
+                            if callable(expected_search_response):
+                                expected_search_response()
+                            return expected_search_response
+                        
+                        return YOTUBE_SEARCH_LIST_RESPONSE
+            
+                return FakeExecutor
 
         return FakeSearch
 
@@ -85,14 +107,15 @@ class FakeYoutubeClient(object):
 class FakeSpotifyClient(object):
     def __init__(self, *args, **kwargs):
         expected_responses = kwargs.pop('expected_responses', {})
-
-        super(FakeSpotifyClient, self).__init__(*args, **kwargs)
-
+     
         self.expected_responses = expected_responses
 
     def me(self):
         expected_response = self.expected_responses.get('me')
         if expected_response:
+            # might be an exception
+            if callable(expected_response):
+                expected_response()
             return expected_response
         
         return SPOTIFY_USER_RESP
@@ -100,6 +123,9 @@ class FakeSpotifyClient(object):
     def track(self, track_id):
         expected_response = self.expected_responses.get('track')
         if expected_response:
+            # might be an exception
+            if callable(expected_response):
+                expected_response()
             return expected_response
 
         return SPOTIFY_TRACK_RESP
@@ -107,6 +133,9 @@ class FakeSpotifyClient(object):
     def user_playlist_tracks(self, user, playlist_id):
         expected_response = self.expected_responses.get('user_playlist_tracks')
         if expected_response:
+            # might be an exception
+            if callable(expected_response):
+                expected_response()
             return expected_response
 
         return SPOTIFY_PLAYLIST_TRACKS_RESP
@@ -114,6 +143,9 @@ class FakeSpotifyClient(object):
     def user_playlist_add_tracks(self, user, playlist_id, tracks):
         expected_response = self.expected_responses.get('user_playlist_add_tracks')
         if expected_response:
+            # might be an exception
+            if callable(expected_response):
+                expected_response()
             return expected_response
 
         return SPOTIFY_ADD_TRACK_RESPONSE
@@ -121,6 +153,9 @@ class FakeSpotifyClient(object):
     def search(self, q, **kwargs):
         expected_response = self.expected_responses.get('search')
         if expected_response:
+            # might be an exception
+            if callable(expected_response):
+                expected_response()
             return expected_response
 
         return SPOTIFY_SEARCH_RESULTS
@@ -128,6 +163,9 @@ class FakeSpotifyClient(object):
     def next(self, tracks_request):
         expected_response = self.expected_responses.get('next')
         if expected_response:
+            # might be an exception
+            if callable(expected_response):
+                expected_response()
             return expected_response
 
         # Pretend we never get paginated responses
