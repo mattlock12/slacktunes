@@ -394,7 +394,7 @@ class YoutubeService(ServiceBase):
         client = self.get_wrapped_client()
 
         channels_response = client.channels().list(part='id', mine=True).execute()
-        if not channels_response or not channels_response['items']:
+        if not channels_response or not channels_response.get('items'):
             # TODO: figure out error handling
             return False, "No channels"
 
@@ -724,7 +724,7 @@ class SpotifyService(ServiceBase):
             playlist = client.user_playlist_create(user=spotify_user_id, name=playlist_name)
         except Exception as e:
             logger.error(e)
-            return False, str(e)
+            return False, "Failed to create playlist"
 
         return True, playlist
 

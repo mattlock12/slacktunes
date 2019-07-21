@@ -596,3 +596,45 @@ YOTUBE_SEARCH_LIST_RESPONSE = {
         }
     ]
 }
+
+YOUTUBE_PLAYLIST_INSERT_RESPONSE = {
+    "kind": "youtube#playlist",
+    "etag": "\"Bdx4f4ps3xCOOo1WZ91nTLkRZ_c/Fct20qbypNYOuIbE8Orn-k4_B2Q\"",
+    "id": "PLvIunE2r3OATmPIgd9IhydYCWbZj29kP-",
+    "snippet": {
+      "publishedAt": "2019-07-21T16:26:44.000Z",
+        "channelId": "UCWZoNEjfsSTHl6-iYAmQoxw",
+        "title": "yt",
+        "description": "Test Youtube Playlist",
+        "thumbnails": {
+            "default": {
+                "url": "http://s.ytimg.com/yts/img/no_thumbnail-vfl4t3-4R.jpg",
+                "width": 120,
+                "height": 90
+            },
+            "medium": {
+                "url": "http://s.ytimg.com/yts/img/no_thumbnail-vfl4t3-4R.jpg",
+                "width": 320,
+                "height": 180
+            },
+            "high": {
+                "url": "http://s.ytimg.com/yts/img/no_thumbnail-vfl4t3-4R.jpg",
+                "width": 480,
+                "height": 360
+            }
+        },
+        "channelTitle": "mattlock12",
+        "tags": [
+            "sample playlist",
+            "API call"
+        ],
+        "defaultLanguage": "en",
+        "localized": {
+            "title": "yt",
+            "description": "Test Youtube Playlist"
+        }
+    },
+    "status": {
+            "privacyStatus": "private"
+    }
+}

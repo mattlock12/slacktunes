@@ -8,6 +8,7 @@ from .base import DatabaseTestBase
 from src.constants import DUPLICATE_TRACK, Platform
 from src.fakes import FakeSpotifyClient, FakeYoutubeClient
 from src.json_fakes import (
+    YOUTUBE_PLAYLIST_INSERT_RESPONSE,
     YOUTUBE_PLAYLIST_ITEMS_LIST_RESPONSE,
     YOTUBE_SEARCH_LIST_RESPONSE,
     YOUTUBE_VIDEOS_LIST_SINGLE_RESPONSE,    
@@ -221,7 +222,7 @@ class YoutubeServiceTestCase(unittest.TestCase):
         )
 
         self.assertEqual(
-            fake_client.insert_calls[0],
+            fake_client.playlist_item_insert_calls[0],
             {
                 'kind': 'youtube#playlistItem',
                 'snippet': {
@@ -302,10 +303,48 @@ class YoutubeServiceTestCase(unittest.TestCase):
 
 
     def test_list_playlists(self):
-        pass
+        self.assertEqual(
+            [p['snippet']['title'] for p in self.service.list_playlists()],
+            ['Playlist1', 'Playlist2']
+        )
 
+    def test_create_playlist_no_channel(self):
+        fake_client = FakeYoutubeClient(expected_responses={
+            'channels_list': {'items': []}
+        })
+        service = YoutubeService(credentials=True, client=fake_client)
+
+        self.assertEqual(
+            service.create_playlist(playlist_name='foobar'),
+            (False, 'No channels')
+        )
+
+    def test_create_playlist_dupe_playlist(self):
+        fake_client = FakeYoutubeClient(expected_responses={
+            'playlists_list':
+            {
+                'items': [
+                    {
+                        'snippet': { 'title': self.playlist.name }
+                    }
+                ]
+            }
+        })
+        service = YoutubeService(credentials=True, client=fake_client)
+
+        self.assertTrue(service.create_playlist(playlist_name=self.playlist.name))
+        self.assertEqual(fake_client.playlist_item_insert_calls, [])
+    
     def test_create_playlist(self):
-        pass
+        title = 'sure thing'
+        res = self.service.create_playlist(playlist_name=title)
+        
+        expected_res = copy.deepcopy(YOUTUBE_PLAYLIST_INSERT_RESPONSE)
+        expected_res['snippet']['title'] = title
+        expected_res['snippet']['localized']['title'] = title
+        
+        self.assertEqual((True, expected_res), res)
+        self.assertTrue(self.service.client.playlist_insert_calls, [title])
 
 class SpotifyServiceTestCase(unittest.TestCase):
     def setUp(self):
@@ -357,6 +396,25 @@ class SpotifyServiceTestCase(unittest.TestCase):
         self.track_info.track_id = 'nope'
         self.assertFalse(self.service.is_track_in_playlist(track_info=self.track_info, playlist=self.playlist))
 
+
+    def test_list_playlists_no_user_info(self):
+        fake_client = FakeSpotifyClient(expected_responses={
+            'me': None
+        })
+        service = SpotifyService(credentials=True, client=fake_client)
+
+        self.assertEqual([], service.list_playlists())
+
+    def test_list_playlists(self):
+        # don't want it returning .next() results
+        self.service.client.nexted = True
+        # cheating because I know what this returns form the fake client
+        self.assertEqual(
+            [{'name': 'Playlist1'}, {'name': 'Playlist2'}],
+            self.service.list_playlists()
+        )
+
+
     def test_add_track_to_playlist_exception(self):
         def raiser():
             raise Exception('nope')
@@ -400,11 +458,50 @@ class SpotifyServiceTestCase(unittest.TestCase):
             [self.track_info.track_id]
         )
 
-    def test_list_playlists(self):
-        pass
+    def test_create_playlist_no_user_info(self):
+        fake_client = FakeSpotifyClient(expected_responses={
+            'me': None
+        })
+        service = SpotifyService(credentials=True, client=fake_client)
+
+        self.assertEqual(
+            (False, "Could not find info for this user"),
+            service.create_playlist(playlist_name='ok')            
+        )
+
+    def test_create_playlist_dupe_playlist(self):
+        dupe_name = 'Playlist1'
+
+        self.assertEqual(
+            (True, {'name': 'Playlist1'}),
+            self.service.create_playlist(playlist_name=dupe_name)
+        )
+    
+    def test_create_playlist_create_exception(self):
+        def raiser():
+            raise Exception("Nope")
+        
+        fake_client = FakeSpotifyClient(expected_responses={
+            'user_playlist_create': raiser
+        })
+        # don't want results from .next()
+        fake_client.nexted = True
+        service = SpotifyService(credentials=True, client=fake_client)
+
+        self.assertEqual(
+            (False, "Failed to create playlist"),
+            service.create_playlist(playlist_name='whatever')
+        )
 
     def test_create_playlist(self):
-        pass
+        pl_name = 'ok'
+        
+        # don't want results from .next()
+        self.service.client.nexted = True
+        self.assertEqual(
+            (True, {'name': pl_name}),
+            self.service.create_playlist(playlist_name=pl_name)
+        )
 
 
 class SpotifyClientFuzzyMatchTestCase(DatabaseTestBase):

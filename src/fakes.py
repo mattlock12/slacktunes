@@ -1,3 +1,5 @@
+import copy
+
 from .json_fakes import (
     SPOTIFY_ADD_TRACK_RESPONSE,
     SPOTIFY_PLAYLIST_TRACKS_RESP,
@@ -7,6 +9,7 @@ from .json_fakes import (
     YOUTUBE_PLAYLIST_ITEMS_LIST_RESPONSE,
     YOTUBE_SEARCH_LIST_RESPONSE,
     YOUTUBE_VIDEOS_LIST_SINGLE_RESPONSE,
+    YOUTUBE_PLAYLIST_INSERT_RESPONSE,
 )
 from .new_services import ServiceBase
 
@@ -29,7 +32,8 @@ class FakeYoutubeClient(object):
         expected_responses = kwargs.pop('expected_responses', {})
 
         self.expected_responses = expected_responses
-        self.insert_calls = []
+        self.playlist_item_insert_calls = []
+        self.playlist_insert_calls = []
 
     def videos(self):
         expected_response = self.expected_responses.get('videos_list')
@@ -37,7 +41,7 @@ class FakeYoutubeClient(object):
         class FakeVideosList(object):
             @classmethod
             def list(cls, part, id, *args, **kwargs):
-                if expected_response:
+                if 'videos_list' in self.expected_responses:
                     # might be an exception
                     if callable(expected_response):
                         expected_response()
@@ -73,8 +77,8 @@ class FakeYoutubeClient(object):
 
             @classmethod
             def insert(cls, part, body):
-                self.insert_calls.append(body)
-                
+                self.playlist_item_insert_calls.append(body)
+
                 return get_yerself_an_executor(
                     expected=expected_insert_response,
                     default=True
@@ -100,7 +104,7 @@ class FakeYoutubeClient(object):
 
         class FakeList(object):
             @classmethod
-            def list(cls):
+            def list(cls, part, mine):
                 return get_yerself_an_executor(
                     expected=expected_list_response,
                     default={"items": [{"id": 123}]}
@@ -117,31 +121,28 @@ class FakeYoutubeClient(object):
             def list(cls, *args, **kwargs):
                 return get_yerself_an_executor(
                     expected=expected_list_response,
-                    default=[
+                    default={'items': [
                         {'snippet': {'title': 'Playlist1'}},
                         {'snippet': {'title': 'Playlist2'}},
-                    ]
+                    ]}
                 )
         
             @classmethod
             def list_next(cls, *args, **kwargs):
-                return get_yerself_an_executor(
-                    expected=None,
-                    default=None
-                )
+                return None
             
             @classmethod
             def insert(cls, body, part):
                 title = body['snippet']['title']
-
+                self.playlist_insert_calls.append(title)
+                
+                default = copy.deepcopy(YOUTUBE_PLAYLIST_INSERT_RESPONSE)
+                default['snippet']['title'] = title
+                default['snippet']['localized']['title'] = title
+                
                 return get_yerself_an_executor(
                     expected=expected_insert_response,
-                    default={
-                        'id': 'abc123',
-                        'snippet': {
-                            'title': title
-                        }
-                    }
+                    default=default
                 )
 
         return FakePlaylists
@@ -157,7 +158,7 @@ class FakeSpotifyClient(object):
 
     def me(self):
         expected_response = self.expected_responses.get('me')
-        if expected_response:
+        if 'me' in self.expected_responses:
             # might be an exception
             if callable(expected_response):
                 expected_response()
@@ -167,7 +168,7 @@ class FakeSpotifyClient(object):
 
     def track(self, track_id):
         expected_response = self.expected_responses.get('track')
-        if expected_response:
+        if 'track' in self.expected_responses:
             # might be an exception
             if callable(expected_response):
                 expected_response()
@@ -177,26 +178,26 @@ class FakeSpotifyClient(object):
     
     def user_playlists(self, user):
         expected_response = self.expected_responses.get('user_playlists')
-        if expected_response:
+        if 'user_playlists' in self.expected_responses:
             if callable(expected_response):
                 return expected_response
             return expected_response
 
-        # TODO: improve once you have internet
-        return [{'name': 'Playlist1'}, {'name': 'Playlist2'}]
+        # TODO: improve if you care
+        return {'items': [{'name': 'Playlist1'}, {'name': 'Playlist2'}]}
 
     def user_playlist_create(self, user, name):
-        expected_response = self.expected_responses.get('user_playlists')
-        if expected_response:
+        expected_response = self.expected_responses.get('user_playlist_create')
+        if 'user_playlist_create' in self.expected_responses:
             if callable(expected_response):
-                return expected_response
+                return expected_response()
             return expected_response
         
-        return True
+        return {'name': name}
     
     def user_playlist_tracks(self, user, playlist_id):
         expected_response = self.expected_responses.get('user_playlist_tracks')
-        if expected_response:
+        if 'user_playlist_tracks' in self.expected_responses:
             # might be an exception
             if callable(expected_response):
                 expected_response()
@@ -207,8 +208,8 @@ class FakeSpotifyClient(object):
     def user_playlist_add_tracks(self, user, playlist_id, tracks):
         expected_response = self.expected_responses.get('user_playlist_add_tracks')
         self.add_track_calls += tracks
-        
-        if expected_response:
+
+        if 'user_playlist_add_tracks' in self.expected_responses:
             # might be an exception
             if callable(expected_response):
                 expected_response()
@@ -219,7 +220,7 @@ class FakeSpotifyClient(object):
     
     def search(self, q, **kwargs):
         expected_response = self.expected_responses.get('search')
-        if expected_response:
+        if 'search' in self.expected_responses:
             # might be an exception
             if callable(expected_response):
                 expected_response()
@@ -229,7 +230,7 @@ class FakeSpotifyClient(object):
 
     def next(self, tracks_request):
         expected_response = self.expected_responses.get('next')
-        if expected_response:
+        if 'next' in self.expected_responses:
             # might be an exception
             if callable(expected_response):
                 expected_response()
