@@ -9,9 +9,7 @@ from src.constants import DUPLICATE_TRACK, Platform
 from src.fakes import FakeSpotifyClient, FakeYoutubeClient
 from src.json_fakes import (
     YOUTUBE_PLAYLIST_INSERT_RESPONSE,
-    YOUTUBE_PLAYLIST_ITEMS_LIST_RESPONSE,
     YOTUBE_SEARCH_LIST_RESPONSE,
-    YOUTUBE_VIDEOS_LIST_SINGLE_RESPONSE,    
     SPOTIFY_TRACK_RESP,
     SPOTIFY_PLAYLIST_TRACKS_RESP,
 )
