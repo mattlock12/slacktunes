@@ -4,15 +4,7 @@ import unittest
 from spotipy.client import SpotifyException
 from fuzzywuzzy import fuzz
 
-from .base import DatabaseTestBase
 from src.constants import DUPLICATE_TRACK, Platform
-from src.fakes import FakeSpotifyClient, FakeYoutubeClient
-from src.json_fakes import (
-    YOUTUBE_PLAYLIST_INSERT_RESPONSE,
-    YOTUBE_SEARCH_LIST_RESPONSE,
-    SPOTIFY_TRACK_RESP,
-    SPOTIFY_PLAYLIST_TRACKS_RESP,
-)
 from src.models import Playlist
 from src.new_services import (
     ServiceFactory,
@@ -22,6 +14,13 @@ from src.new_services import (
     YOUTUBE_TOKEN_SET_THRESHHOLD,
     SPOTIFY_TOKEN_SET_THRESHHOLD,
     SPOTIFY_TOKEN_SORT_THRESHHOLD
+)
+from tests.fakes import FakeSpotifyClient, FakeYoutubeClient
+from tests.json_fakes import (
+    YOUTUBE_PLAYLIST_INSERT_RESPONSE,
+    YOTUBE_SEARCH_LIST_RESPONSE,
+    SPOTIFY_TRACK_RESP,
+    SPOTIFY_PLAYLIST_TRACKS_RESP,
 )
 
 YOUTUBE_LINK_WEB = "https://www.youtube.com/watch?v=XPpTgCho5ZA"
@@ -502,7 +501,7 @@ class SpotifyServiceTestCase(unittest.TestCase):
         )
 
 
-class SpotifyClientFuzzyMatchTestCase(DatabaseTestBase):
+class SpotifyClientFuzzyMatchTestCase(unittest.TestCase):
     def test_fuzzy_search_for_track_bad_results(self):
         pass
     

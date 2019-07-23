@@ -11,7 +11,9 @@ from .json_fakes import (
     YOUTUBE_VIDEOS_LIST_SINGLE_RESPONSE,
     YOUTUBE_PLAYLIST_INSERT_RESPONSE,
 )
-from .new_services import ServiceBase
+from src.constants import Platform
+from src.message_formatters import SlackMessageFormatter
+from src.new_services import ServiceBase, SpotifyService, YoutubeService
 
 
 def get_yerself_an_executor(expected, default):
@@ -243,3 +245,20 @@ class FakeSpotifyClient(object):
         self.nexted = True
 
         return SPOTIFY_PLAYLIST_TRACKS_RESP
+
+
+class FakeServiceFactory(object):
+    Y_CLIENT = None
+    S_CLIENT = None
+    
+    @classmethod
+    def from_enum(cls, enum):
+        def get_it(cls, credentials):
+
+            if enum is Platform.YOUTUBE:
+                return YoutubeService(client=cls.Y_CLIENT, credentials=credentials)
+        
+            if enum is Platform.SPOTIFY:
+                return SpotifyService(client=cls.S_CLIENT, credentials=credentials)
+        
+        return get_it

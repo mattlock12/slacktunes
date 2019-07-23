@@ -25,6 +25,13 @@ class SlackMessageFormatter(object):
         self.cross_platform_failures = cross_platform_failures
 
     @classmethod
+    def post_message(cls, payload):
+        payload.update({"token": SLACK_OAUTH_TOKEN})
+        res = requests.post(url=SlackUrl.POST_MESSAGE.value, data=payload)
+
+        return res.text, res.status_code
+
+    @classmethod
     def total_failure_message(self, link):
         return {
             "text": "Unable to find info for link %s" % link

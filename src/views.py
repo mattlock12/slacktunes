@@ -11,7 +11,7 @@ from app import application, logger
 from .constants import InvalidEnumException, Platform, SlackUrl
 from .models import Credential, Playlist, User
 from .music_services import ServiceBase, TrackInfo
-from .utils import get_links, post_update_to_chat, add_link_to_playlists_from_event, add_manual_track_to_playlists
+from .utils import get_links, post_message_to_chat, add_manual_track_to_playlists
 
 
 # UTILITY DECORATOR
@@ -126,7 +126,7 @@ def list_playlists():
     playlists_with_platform = ["*%s* (%s)" % (pl.name, pl.platform.name.title()) for pl in playlists]
     msg_body = "Found *%s* playlists in this channel: \n%s" % (len(playlists), "\n".join(playlists_with_platform))
 
-    post_update_to_chat(payload={"channel": channel_id, "text": msg_body})
+    post_message_to_chat(payload={"channel": channel_id, "text": msg_body})
 
     return "", 200
 
@@ -354,6 +354,6 @@ def slack_events():
         return "Ok", 200
 
     # CELERY
-    add_link_to_playlists_from_event(event)
+    # add_link_to_playlists_from_event(event)
 
     return "Ok", 200
