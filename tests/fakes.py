@@ -13,7 +13,7 @@ from .json_fakes import (
 )
 from src.constants import Platform
 from src.message_formatters import SlackMessageFormatter
-from src.new_services import ServiceBase, SpotifyService, YoutubeService
+from src.music_services import ServiceBase, SpotifyService, YoutubeService
 
 
 def get_yerself_an_executor(expected, default):

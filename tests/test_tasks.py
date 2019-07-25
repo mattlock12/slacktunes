@@ -7,7 +7,7 @@ from tests.fakes import FakeSpotifyClient, FakeYoutubeClient, FakeServiceFactory
 from src.constants import Platform
 from src.message_formatters import SlackMessageFormatter
 from src.models import Credential, Playlist, User
-from src.new_services import ServiceFactory, TrackInfo, YoutubeService
+from src.music_services import ServiceFactory, TrackInfo, YoutubeService
 from src.tasks import add_link_to_playlists
 from settings import SLACKTUNES_USER_ID
 

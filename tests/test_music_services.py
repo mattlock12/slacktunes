@@ -6,7 +6,7 @@ from fuzzywuzzy import fuzz
 
 from src.constants import DUPLICATE_TRACK, Platform
 from src.models import Playlist
-from src.new_services import (
+from src.music_services import (
     ServiceFactory,
     SpotifyService,
     TrackInfo,
@@ -232,50 +232,35 @@ class YoutubeServiceTestCase(unittest.TestCase):
             }
         )
 
-    def test_fuzzy_search_for_track_no_results_over_fuzz_limit(self):
-        spotify_ti = TrackInfo(
-            name="Sure",
-            artists="Why not",
-            platform=Platform.SPOTIFY
-        )
-
-        target = spotify_ti.track_name_for_comparison()
+    def test_best_match_no_results_over_fuzz_limit(self):
         # set up some bad results
+        target = "Sure Why not"
         results = copy.deepcopy(YOTUBE_SEARCH_LIST_RESPONSE)
         items = results['items']
         bad_items = []
         for item in items:
             current_name = item['snippet']['title']
-            while fuzz.token_set_ratio(spotify_ti.track_name_for_comparison(), current_name) >= YOUTUBE_TOKEN_SET_THRESHHOLD:
+            while fuzz.token_set_ratio(target, current_name) >= YOUTUBE_TOKEN_SET_THRESHHOLD:
                 current_name += "a"
             
             item['snippet']['title'] = current_name
             bad_items.append(item)
         
-        results['items'] = bad_items
-        fake_client = FakeYoutubeClient(expected_responses={
-            "search": results
-        })
+        fake_client = FakeYoutubeClient()
         service = YoutubeService(credentials={'ok': True}, client=fake_client)
 
-        self.assertIsNone(service.fuzzy_search_for_track(track_info=spotify_ti))
+        self.assertIsNone(service.best_match(target_string=target, search_results=bad_items))
 
-    def test_fuzzy_search_for_track_good_results(self):
-        spotify_ti = TrackInfo(
-            name="Sure",
-            artists="Why not",
-            platform=Platform.SPOTIFY
-        )
-
-        target = spotify_ti.track_name_for_comparison()
+    def test_best_match_good_results(self):
         # set up some bad results
+        target = "Sure Why not"
         results = copy.deepcopy(YOTUBE_SEARCH_LIST_RESPONSE)
         items = results['items']
         bad_items = []
         for item in items[:-1]:
             # make sure all but one are bad
-            current_name = spotify_ti.track_name_for_comparison()
-            while fuzz.token_set_ratio(spotify_ti.track_name_for_comparison(), current_name) >= YOUTUBE_TOKEN_SET_THRESHHOLD:
+            current_name = target
+            while fuzz.token_set_ratio(target, current_name) >= YOUTUBE_TOKEN_SET_THRESHHOLD:
                 current_name += "a"
             
             item['snippet']['title'] = current_name
@@ -284,20 +269,16 @@ class YoutubeServiceTestCase(unittest.TestCase):
         # make one item that's good
         good_item = items[-1]
         # don't make it perfect, for some reason
-        pretty_good_title = spotify_ti.track_name_for_comparison() + 'a'
+        pretty_good_title = target + 'a'
         good_item['snippet']['title'] = pretty_good_title
         bad_items.append(good_item)
         
-        results['items'] = bad_items
-        fake_client = FakeYoutubeClient(expected_responses={
-            "search": results
-        })
+        fake_client = FakeYoutubeClient()
         service = YoutubeService(credentials={'ok': True}, client=fake_client)
-        match = service.fuzzy_search_for_track(track_info=spotify_ti)
+        match = service.best_match(target_string=target, search_results=bad_items)
 
         self.assertIsInstance(match, TrackInfo)
         self.assertTrue(match.name, pretty_good_title)
-
 
     def test_list_playlists(self):
         self.assertEqual(
