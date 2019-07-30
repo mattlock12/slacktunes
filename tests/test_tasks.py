@@ -4,7 +4,6 @@ import unittest
 from unittest.mock import call, patch
 
 from tests.base import DatabaseTestBase
-# from tests.fakes import FakeSpotifyClient, FakeYoutubeClient, FakeServiceFactory
 from src.constants import Platform
 from src.message_formatters import SlackMessageFormatter
 from src.models import Credential, Playlist, User

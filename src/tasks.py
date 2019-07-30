@@ -18,12 +18,6 @@ from src.utils import (
 app = celery.Celery('tasks', broker="redis://redisbroker:6379/0")
 
 
-class SearchHolder(object):
-    def __init__(self, track_name, artist=None):
-        self.track_name = track_name
-        self.artist = artist
-    
-
 @app.task
 def search_and_add_to_playlists(origin, platform, channel):
     """

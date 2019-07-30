@@ -23,7 +23,7 @@ class SlackMessageFormatter(object):
         if not successes and not failures:
             return {}
         
-        success_str = " *<%s|%s>*" % (track_info.track_open_url(), track_info.get_track_name())
+        success_str = "*<%s|%s>*" % (track_info.track_open_url(), track_info.get_track_name())
         failure_str = ''
 
         if successes:

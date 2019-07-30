@@ -1,11 +1,8 @@
 import requests
 
-from .constants import Platform, SlackUrl
-from .models import Credential, Playlist, User
-from .music_services import ServiceFactory, Platform, NoCredentialsError
-
-from app import logger
-from settings import SLACK_OAUTH_TOKEN
+from .constants import Platform
+from .models import User
+from .music_services import ServiceFactory
 
 
 def get_links(channel_history):

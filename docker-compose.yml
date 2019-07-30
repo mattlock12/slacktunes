@@ -10,8 +10,6 @@ services:
     volumes:
       - ./database-init.sql:/docker-entrypoint-initdb.d/databases.sql
       - "dbdata:/var/lib/postgresql/data"
-    ports:
-      - 5432:5432
 
   redis:
     container_name: redisbroker

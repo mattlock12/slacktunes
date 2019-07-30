@@ -245,20 +245,3 @@ class FakeSpotifyClient(object):
         self.nexted = True
 
         return SPOTIFY_PLAYLIST_TRACKS_RESP
-
-
-class FakeServiceFactory(object):
-    Y_CLIENT = None
-    S_CLIENT = None
-    
-    @classmethod
-    def from_enum(cls, enum):
-        def get_it(cls, credentials):
-
-            if enum is Platform.YOUTUBE:
-                return YoutubeService(client=cls.Y_CLIENT, credentials=credentials)
-        
-            if enum is Platform.SPOTIFY:
-                return SpotifyService(client=cls.S_CLIENT, credentials=credentials)
-        
-        return get_it

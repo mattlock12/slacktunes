@@ -13,7 +13,7 @@ application.secret_key = str(uuid.uuid4())
 
 logger = logging.getLogger(__name__)
 handler = logging.StreamHandler()
-handler.setLevel(logging.DEBUG)
+handler.setLevel(logging.INFO)
 logger.addHandler(handler)
 db = SQLAlchemy(application)
 

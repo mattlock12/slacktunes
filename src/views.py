@@ -27,7 +27,7 @@ def verified_slack_request(f):
             request_data_dict = request.form
 
         if request_data_dict.get('token', None) != SLACK_VERIFICATION_TOKEN:
-            return "%s Not verified slack message %s" % (request_data_dict, SLACK_VERIFICATION_TOKEN), 400
+            return "Not a verified slack message", 400
         return f(*args, **kwargs)
     return decorated_function
 
@@ -121,7 +121,6 @@ def spotifyoauth2callback():
 @application.route('/list_playlists/', methods=['POST'])
 @verified_slack_request
 def list_playlists():
-    logger.info("WTF")
     channel_id = request.form['channel_id']
 
     playlists = Playlist.query.filter_by(channel_id=channel_id).all()
@@ -395,7 +394,7 @@ def slack_events():
     link = links[0].get('url')
     
     # CELERY
-    print("GETTING READY TO ADD LINK")
+    logger.info("Adding link %s to playilists" % link)
     add_link_to_playlists.delay(
         link=link,
         channel=channel
