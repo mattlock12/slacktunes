@@ -1,51 +1,33 @@
 import requests
 
 from .constants import SlackUrl
+from .music_services import TrackInfo
 from settings import SLACK_OAUTH_TOKEN
 
 class SlackMessageFormatter(object):
-    """
-    Feed me TrackInfo objects and lists of Tuple(playlist, error_message|None)
-    and I will give you formatted messages and POST them to slack
-    """
-    def __init__(
-        self,
-        native_track_info=None,
-        cross_platform_track_info=None,
-        native_platform_successes=None,
-        native_platform_failures=None,
-        cross_platform_successes=None,
-        cross_platform_failures=None
-    ):
-        self.native_track_info = native_track_info
-        self.cross_platform_track_info = cross_platform_track_info
-        self.native_platform_successes = native_platform_successes
-        self.native_platform_failures = native_platform_failures
-        self.cross_platform_successes = cross_platform_successes
-        self.cross_platform_failures = cross_platform_failures
-
     @classmethod
     def post_message(cls, payload):
-        payload.update({"token": SLACK_OAUTH_TOKEN})
-        res = requests.post(url=SlackUrl.POST_MESSAGE.value, data=payload)
+        res = requests.post(
+            url=SlackUrl.POST_MESSAGE.value,
+            json=payload,
+            headers={
+                "Content-type": "application/json",
+                "Authorization": "Bearer %s" % SLACK_OAUTH_TOKEN
+            }
+        )
 
         return res.text, res.status_code
 
     @classmethod
-    def total_failure_message(self, link):
-        return {
-            "text": "Unable to find info for link %s" % link
-        }
-
-    def format_results_block(self, track_info, successes, failures):
+    def format_results_block(cls, track_info, successes, failures):
         if not successes and not failures:
             return {}
         
-        success_str = "*<%s|%s>*" % (track_info.track_open_url(), track_info.get_track_name())
+        success_str = " *<%s|%s>*" % (track_info.track_open_url(), track_info.get_track_name())
         failure_str = ''
 
         if successes:
-            success_str += "\nWas added to playlists:\n"
+            success_str += "\n\nWas added to playlists:\n"
             successful_playlists = "\n".join([
               "*%s* (%s)" % (pl.name, pl.platform.name.title()) for pl, _
                 in successes
@@ -53,9 +35,9 @@ class SlackMessageFormatter(object):
             success_str += successful_playlists
         
         if failures:
-            failure_str = "\nFailed to add to playlists:\n"
+            failure_str = "\n\nFailed to add to playlists:\n"
             failed_playlists = "\n".join([
-                "*%s* (%s) %s" % (pl.name, pl.platform.name.title(), reason) for pl, reason
+                "*%s* (%s) - %s" % (pl.name, pl.platform.name.title(), reason) for pl, reason
                 in failures
             ])
             failure_str += failed_playlists
@@ -73,61 +55,62 @@ class SlackMessageFormatter(object):
                 "alt_text": track_info.get_track_name()
             }
         }
-    
-    def format_no_results_block(self, cross_platform_track_info):
-        return  {
-            "type": "section",
-            "text": {
-                "type": "mrkdwn",
-                "text": "Unable to find %s track for %s\n\nWill schedule another search in 1 week" % (
-                    cross_platform_track_info.platform.name.title(),
-                    cross_platform_track_info.get_track_name()
-                )
-            }
+
+    @classmethod
+    def format_failed_search_results_message(cls, origin, target_platform):
+        if isinstance(origin, TrackInfo):
+            origin_link = "*<%s|%s>*" % (origin.track_open_url(), origin.get_track_name())
+            attempt_message = "Unable to find %s track for %s" % (
+                target_platform.name.title(),
+                origin_link
+            )
+        else:
+            attempt_message = "Unable to find %s track for %s" % (
+                target_platform.name.title(),
+                origin
+            )
+        
+        return {
+            'blocks': [
+                {
+                    "type": "section",
+                    "text": {
+                        "type": "mrkdwn",
+                        "text": attempt_message
+                    }
+                },
+                {
+                    "type": "divider"
+                }
+            ]
         }
 
-
-    def format_add_link_message(self):
-        blocks = []
-
-        # This is the easy part: just show which of the native platform playlists the track
-        # was added to (or failed to add to)
-        any_native_results_to_display = self.native_platform_failures or self.native_platform_successes
-        if any_native_results_to_display:
-            blocks.append(self.format_results_block(
-                track_info=self.native_track_info,
-                successes=self.native_platform_successes,
-                failures=self.native_platform_failures
-            ))
-
-        # This is a little trickier
-        # If we have any native platform results to show, append a divider
-        if self.cross_platform_failures or self.cross_platform_successes:
-            if any_native_results_to_display:
-                blocks.append({"type": "divider"})
+    @classmethod
+    def format_add_track_results_message(cls, origin, track_info, successes, failures):
+        """
+        This method assumes that we have successfully found TrackInfo for a shared link or add_track string
+        """
+        if isinstance(origin, TrackInfo):
+            attempt_message = "Attempted match from %s link:\n %s" % (
+                origin.platform.name.title(),
+                origin.track_open_url()
+            )
             
-            # if we found a cross platform equivalent, format it
-            if self.cross_platform_track_info:
-                blocks.append(self.format_results_block(
-                    track_info=self.cross_platform_track_info,
-                    successes=self.cross_platform_successes,
-                    failures=self.cross_platform_failures
-                ))
-            else:
-                # If not, apologize and promise to do better
-                blocks.append(self.format_no_results_block(cross_platform_track_info=self.native_track_info))
-
-            track_link = "*<%s|%s>*" % (self.native_track_info.track_open_url(), self.native_track_info.get_track_name())
-            blocks.append({
-                "type": "context",
-                "elements": [
-                    {
-                        "type": "mrkdwn",
-                        "text": "Attempted match from %s link %s" % (self.native_track_info.platform.name.title(), track_link)
-                    }
-                ]
-            })
+        else:
+            attempt_message = "Attempted match for:\n %s" % origin
 
         return {
-            "blocks": blocks
+            'blocks': [
+                cls.format_results_block(track_info=track_info, successes=successes, failures=failures),
+                {
+                    "type": "context",
+                    "elements": [
+                        {
+                            "type": "mrkdwn",
+                            "text": attempt_message
+                        }
+                    ]
+                },
+                { "type": "divider" }
+            ]
         }

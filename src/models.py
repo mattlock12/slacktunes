@@ -51,6 +51,7 @@ class User(db.Model, BaseModelMixin):
     slack_id = db.Column(db.String(100), index=True, unique=True)
     last_posted_auth_error = db.Column(db.DateTime, default=now)
     credentials = db.relationship('Credential', backref='user', lazy='dynamic')
+    is_service_user = db.Column(db.Boolean, default=False)
 
     def __init__(self, name, slack_id):
         self.name = name

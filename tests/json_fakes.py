@@ -425,6 +425,10 @@ YOUTUBE_VIDEOS_LIST_SINGLE_RESPONSE = {
                 "title": "Maroon 5 - This Love (Official Music Video)",
                 "description": "REMASTERED IN HD!\n\nSign up for updates: http://smarturl.it/Maroon5.News\n\nMusic video by Maroon 5 performing This Love. (C) 2003 OctoScope Music, LLC\n\n#Remastered"
             },
+            "resourceId": {
+                "kind": "youtube#video",
+                "videoId": "XPpTgCho5ZA"
+            },
             "defaultAudioLanguage": "en-US"
         }
     }]

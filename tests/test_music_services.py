@@ -127,7 +127,7 @@ class YoutubeServiceTestCase(unittest.TestCase):
         self.track_info = TrackInfo(
             name="Maroon 5 - This Love (Official Music Video)",
             platform=Platform.YOUTUBE,
-            track_id="UkRFTTRwWUpwN3hKU2VqaFhZOVRZZ1V6UHcuWFBwVGdDaG81WkE="
+            track_id="XPpTgCho5ZA"
         )
 
     def test_get_track_info_from_link_non_youtube_link(self):
@@ -140,7 +140,6 @@ class YoutubeServiceTestCase(unittest.TestCase):
         # cheating here a little bit because I know that the default behavior of this fake client
         # and wht it will return
         self.assertEqual(ti.name, "Maroon 5 - This Love (Official Music Video)")
-
 
     def test_get_track_info_from_link_mobile(self):
         ti = self.service.get_track_info_from_link(link=YOUTUBE_LINK_MOBILE)
@@ -177,7 +176,6 @@ class YoutubeServiceTestCase(unittest.TestCase):
             track_info=TrackInfo(name='nah', platform=Platform.YOUTUBE, track_id='nah'),
             playlist=self.playlist
         ))    
-
 
     def test_add_track_to_playlist_fails_error(self):
         def raise_exception():
@@ -343,7 +341,7 @@ class SpotifyServiceTestCase(unittest.TestCase):
             name="This Love",
             artists=[a['name'] for a in SPOTIFY_TRACK_RESP['artists']],
             platform=Platform.SPOTIFY,
-            track_id="6ECp64rv50XVz93WvxXMGF"
+            track_id="aaa"
         )
     
     def test_get_track_info_from_link_desktop(self):
@@ -367,7 +365,8 @@ class SpotifyServiceTestCase(unittest.TestCase):
         )
 
     def test_is_track_in_playlist_is_in_playlist(self):
-        # of course 'This Love' is in the playlista
+        # cheat because I know this id is in the json fakes
+        self.track_info.track_id = '6ECp64rv50XVz93WvxXMGF'
         self.assertTrue(self.service.is_track_in_playlist(track_info=self.track_info, playlist=self.playlist))
 
     def test_is_track_in_playlist_is_not_in_playlist(self):
@@ -420,7 +419,7 @@ class SpotifyServiceTestCase(unittest.TestCase):
         service = SpotifyService(credentials={'ok': True}, client=fake_client)
 
         self.assertEqual(
-            (False, "Unable to add %s to %s" % (self.track_info.name, self.playlist.name)),
+            (False, 'Unable to add %s to %s' % (self.track_info.name, self.playlist.name)),
             service.add_track_to_playlist(track_info=self.track_info, playlist=self.playlist)
         )
 

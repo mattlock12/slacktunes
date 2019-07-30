@@ -9,17 +9,23 @@ services:
     tty: true
     volumes:
       - ./database-init.sql:/docker-entrypoint-initdb.d/databases.sql
+      - "dbdata:/var/lib/postgresql/data"
+    ports:
+      - 5432:5432
 
   redis:
+    container_name: redisbroker
     image: redis
     restart: always
 
-  # celeryworker:
-  #   build: ./
-  #   restart: always
-  #   depends_on:
-  #     - redis
-  #   command: ["celery", "-A", "src", "worker", "-l", "info"]
+  celeryworker:
+    build: ./
+    restart: always
+    depends_on:
+      - redis
+    env_file:
+      - dev.env
+    command: celery -A src.tasks worker --loglevel=info
 
   slacktunes:
     build: ./
@@ -35,4 +41,7 @@ services:
     tty: true
     ports:
       - 8080:8080
-    command: gunicorn -b 0.0.0.0:8080 application:application
+    command: /bin/bash -c './startup.sh && gunicorn -b 0.0.0.0:8080 application:application'
+    
+volumes:
+  dbdata:

@@ -51,7 +51,10 @@ def credentials_required(f):
 class TrackInfo(object):
     def __init__(self, name, platform, raw_json=None, artists=None, track_id=None, link=None):
         self.name = name
-        self.platform = platform
+        if isinstance(platform, Platform):
+            self.platform = platform
+        else:
+            self.platform = Platform.from_string(platform)
         self.raw_json = raw_json  # NOTE: for youtube responses, this means raw['snippet']
         self.artists = artists
         self.track_id = track_id
@@ -115,19 +118,18 @@ class TrackInfo(object):
 
     def track_image_url(self):
         if not self.raw_json:
-            return None
-    
-        if self.platform is Platform.YOUTUBE:
-            return self.raw_json.get('thumbnails', {}).get('default')
-        elif self.platform is Platform.SPOTIFY:
-            images = self.raw_json.get('images')
-            if not images:
-                return None
-            
-            return min(images, key=lambda im: im['height']).get('url', None)
-        else:
-            return None
+            return 'nope'
 
+        if self.platform is Platform.YOUTUBE:
+            return self.raw_json.get('thumbnails', {}).get('default', {}).get('url', 'nope')
+        elif self.platform is Platform.SPOTIFY:
+            images = self.raw_json.get('album', {}).get('images', None)
+            if not images:
+                return 'nope'
+            
+            return  min(images, key=lambda im: im['height']).get('url', 'nope')
+        else:
+            return 'nope'
 
     def sanitized_track_name(self):
         new_title = re.sub(r"[|&'_-]", "", self.name)
@@ -211,13 +213,13 @@ class ServiceBase(object, metaclass=abc.ABCMeta):
     @abc.abstractclassmethod
     def best_match(self, target_string, search_results, track_info=None):
         raise NotImplementedError()
-
-    @abc.abstractmethod
-    def fuzzy_search_from_string(self, track_name, artist=None):
-        raise NotImplementedError()
     
     @abc.abstractmethod
-    def fuzzy_search_from_cross_platform_track(self, track_info):
+    def fuzzy_search(self, track_name, artist):
+        raise NotImplementedError()
+
+    @abc.abstractmethod
+    def fuzzy_search_from_track_info(self, track_info):
         raise NotImplementedError()
 
     @abc.abstractmethod
@@ -305,7 +307,7 @@ class YoutubeService(ServiceBase):
         client = self.get_wrapped_client()
 
         list_kwargs = {
-            'part': 'id',
+            'part': 'snippet',
             'playlistId': playlist.platform_id,
             'maxResults': 50
         }
@@ -318,9 +320,15 @@ class YoutubeService(ServiceBase):
         playlist_items_list_request = client.playlistItems().list(**list_kwargs)
         while playlist_items_list_request:
             playlist_items_list_response = playlist_items_list_request.execute()
-            track_ids = track_ids.union({item['id'] for item in playlist_items_list_response['items']})
+            track_ids = track_ids.union({
+                item['snippet']['resourceId']['videoId']
+                for item in playlist_items_list_response['items']
+            })
 
-            playlist_items_list_request = client.playlistItems().list_next(playlist_items_list_request, playlist_items_list_response)
+            playlist_items_list_request = client.playlistItems().list_next(
+                playlist_items_list_request,
+                playlist_items_list_response
+            )
 
         return track_ids
 
@@ -370,7 +378,7 @@ class YoutubeService(ServiceBase):
             raw_json=best_result[0]['snippet']
         )
 
-    def fuzzy_search_from_string(self, track_name, artist=None):
+    def fuzzy_search(self, track_name, artist=None):
         client = self.get_wrapped_client()
         search_kwargs = {
             'part': 'snippet',
@@ -378,7 +386,11 @@ class YoutubeService(ServiceBase):
             'type': 'video'
         }
 
-        target_string = "%s %s" % (track_name, artist)
+        target_string = "%s" % track_name
+        if artist:
+            target_string += " %s" % artist
+        target_string = target_string.strip()
+
         try:
             search_results = client.search().list(q=target_string, **search_kwargs).execute()
         except Exception as e:
@@ -394,30 +406,9 @@ class YoutubeService(ServiceBase):
             search_results=search_results
         )
 
-    def fuzzy_search_from_cross_platform_track(self, track_info):
-        client = self.get_wrapped_client()
-        search_kwargs = {
-            'part': 'snippet',
-            'maxResults': 10,
-            'type': 'video'
-        }
-
-        try:
-            search_results = client.search().list(q=track_info.track_name_for_comparison(), **search_kwargs).execute()
-        except Exception as e:
-            # TODO: better exception handling
-            return None
-
-        search_results = search_results.get('items', None)
-        if not search_results:
-            return None
-
-        return self.best_match(
-            target_string=track_info.track_name_for_comparison(),
-            search_results=search_results,
-            track_info=track_info
-        )
-
+    def fuzzy_search_from_track_info(self, track_info):
+        return self.fuzzy_search(track_name=track_info.track_name_for_comparison())
+        
     def list_playlists(self):
         client = self.get_wrapped_client()
 
@@ -549,14 +540,12 @@ class SpotifyService(ServiceBase):
     
     def get_track_ids_in_playlist(self, playlist, track_id=None):
         client = self.get_wrapped_client()
-
+        
+        track_ids = set()
         tracks_request = client.user_playlist_tracks(
             user=self.get_user_info()['id'],
             playlist_id=playlist.platform_id
         )
-
-        track_ids = set()
-        tracks_request = client.next(tracks_request)
         while tracks_request:
             track_ids= track_ids.union({t['track']['id'] for t in tracks_request['items']})
 
@@ -569,6 +558,9 @@ class SpotifyService(ServiceBase):
     
     def add_track_to_playlist(self, track_info, playlist):
         client = self.get_wrapped_client()
+        
+        if self.is_track_in_playlist(track_info=track_info, playlist=playlist):
+            return False, DUPLICATE_TRACK
         
         try:
             resp = client.user_playlist_add_tracks(
@@ -587,7 +579,7 @@ class SpotifyService(ServiceBase):
 
         return True, None
 
-    def fuzzy_search_from_string(self, track_name, artist=None):
+    def fuzzy_search(self, track_name, artist=None):
         client = self.get_wrapped_client()
         search_kwargs = {
             'market': 'US',
@@ -615,33 +607,11 @@ class SpotifyService(ServiceBase):
 
         return self.best_match(target_string=target_string, search_results=results)
     
-    def fuzzy_search_from_cross_platform_track(self, track_info):
-        client = self.get_wrapped_client()
-        search_kwargs = {
-            'market': 'US',
-            'type': 'track',
-            'limit': 50
-        }
-        
-        search_string = "track: %s" % track_info.sanitized_track_name()
-        if track_info.platform is Platform.SPOTIFY:
-            search_string += " artist:%s" % track_info.artists_for_search()
-        
-        try:
-            results = client.search(q=search_string, **search_kwargs)
-        except Exception as e:
-            logger.error(e)
-            return None
-
-        if not results:
-            return None
-        if not results.get('tracks', {}).get('items'):
-            return None
-
-        target = track_info.track_name_for_comparison()
-        results = results['tracks']['items']
-
-        return self.best_match(target_string=target, search_results=results, track_info=track_info)
+    def fuzzy_search_from_track_info(self, track_info):
+        return self.fuzzy_search(
+            track_name=track_info.sanitized_track_name(),
+            artist=track_info.artists_for_search()
+        )
 
     def best_match(self, target_string, search_results, track_info=None):
         """

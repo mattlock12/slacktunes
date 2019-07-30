@@ -11,4 +11,7 @@ WORKDIR /app
 
 COPY . .
 
-EXPOSE 8000
+RUN chmod +x ./startup.sh
+# RUN ./startup.sh
+
+EXPOSE 8080
