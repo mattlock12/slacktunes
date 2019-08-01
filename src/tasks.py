@@ -3,17 +3,20 @@ import copy
 import json
 
 import celery
+import requests
 
-from src.constants import Platform
+from src.constants import Platform, SlackUrl
 from src.models import Playlist, User
 from src.message_formatters import SlackMessageFormatter
 from src.music_services import ServiceFactory, TrackInfo
 from src.utils import (
     add_track_to_playlists,
+    get_links,
     fuzzy_search_from_string,
     fuzzy_search_from_track_info,
     get_track_info_from_link
 )
+from settings import SLACK_OAUTH_TOKEN
 
 app = celery.Celery('tasks', broker="redis://redisbroker:6379/0")
 
@@ -135,5 +138,83 @@ def add_link_to_playlists(link, channel):
     )
     payload.update({'channel': channel})
     SlackMessageFormatter.post_message(payload=payload)
+
+    return True
+
+
+@app.task
+def add_links_to_playlist(channel_id, playlist_id):
+    playlist = Playlist.query.filter_by(id=playlist_id).first()
+    if not playlist:
+        SlackMessageFormatter.post_message(
+            payload={
+                'channel': channel_id,
+                'text': 'No playlist in this channel with id %s' % playlist_id
+            }
+        )
+        return False
+
+    history_payload = {
+        "token": SLACK_OAUTH_TOKEN,
+        "channel": channel_id,
+        "count": 1000
+    }
+    channel_history = requests.post(url=SlackUrl.CHANNEL_HISTORY.value, data=history_payload)
+    channel_history_jsonable = channel_history.json().get('messages')
+
+    links = get_links(channel_history=channel_history_jsonable)
+    """
+    Links will either be same or cross platform
+    If same, get the id and add
+    If cross platform, search and add by id
+    """
+    playlist_music_service = ServiceFactory.from_enum(playlist.platform)(
+        credentials=playlist.user.credentials_for_platform(playlist.platform)
+    )
+    cross_platform = Platform.YOUTUBE if playlist.platform is Platform.SPOTIFY else Platform.SPOTIFY
+    slacktunes_service_user = User.query.filter_by(is_service_user=True).first()
+    slacktunes_service_credentials = slacktunes_service_user.credentials_for_platform(platform=cross_platform)
+    cross_platform_slacktunes_service = ServiceFactory.from_enum(cross_platform)(
+        credentials=slacktunes_service_credentials)
+    
+
+    successes = 0
+    failures = 0
+    for link in links:
+        link_platform = Platform.from_link(link)
+
+        if link_platform is playlist.platform:
+            track_info = playlist_music_service.get_track_info_from_link(link=link)
+            success, _ = playlist_music_service.add_track_to_playlist(
+                track_info=track_info,
+                playlist=playlist
+            )
+        else:
+            cross_track_info = cross_platform_slacktunes_service.get_track_info_from_link(link=link)
+            best_match = fuzzy_search_from_track_info(
+                track_info=cross_track_info,
+                slacktunes_cross_service=cross_platform_slacktunes_service
+            )
+            if not best_match:
+                success = False
+            else:
+                success, _ = playlist_music_service.add_track_to_playlist(
+                    track_info=best_match,
+                    playlist=playlist
+                )
+        if success:
+            successes += 1
+        else:
+            failures += 1
+    
+    SlackMessageFormatter.post_message(payload={
+        'channel': channel_id,
+        'text': "Finished scraping music for %s (%s)\nSuccessfully added %s tracks\nFailed to add %s tracks" % (
+            playlist.name,
+            playlist.platform.title(),
+            successes,
+            failures
+        )
+    })
 
     return True

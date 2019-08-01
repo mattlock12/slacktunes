@@ -380,7 +380,7 @@ YOUTUBE_VIDEOS_LIST_SINGLE_RESPONSE = {
             "publishedAt": "2009-06-17T05:22:13.000Z",
             "channelId": "UCN1hnUccO4FD5WfM7ithXaw",
             "title": "Maroon 5 - This Love (Official Music Video)",
-            "description": "REMASTERED IN HD!\n\nSign up for updates: http://smarturl.it/Maroon5.News\n\nMusic video by Maroon 5 performing This Love. (C) 2003 OctoScope Music, LLC\n\n#Remastered",
+            "description": "It's fuckin' Maroon 5!",
             "thumbnails": {
                 "default": {
                     "url": "https://i.ytimg.com/vi/XPpTgCho5ZA/default.jpg",
@@ -450,7 +450,7 @@ YOUTUBE_PLAYLIST_ITEMS_LIST_RESPONSE = {
             "publishedAt": "2009-06-17T05:22:13.000Z",
             "channelId": "UCBR8-60-B28hp2BmDPdntcQ",
             "title": "Maroon 5 - This Love (Official Music Video)",
-            "description": "REMASTERED IN HD!\n\nSign up for updates: http://smarturl.it/Maroon5.News\n\nMusic video by Maroon 5 performing This Love. (C) 2003 OctoScope Music, LLC\n\n#Remastered",
+            "description": "It's fuckin' Maroon 5!",
             "thumbnails": {
                 "default": {
                     "url": "https://i.ytimg.com/vi/XPpTgCho5ZA/default.jpg",

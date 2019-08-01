@@ -23,7 +23,7 @@ class SlackMessageFormatter(object):
         if not successes and not failures:
             return {}
         
-        success_str = "*<%s|%s>*" % (track_info.track_open_url(), track_info.get_track_name())
+        success_str = "*<%s|%s>*" % (track_info.track_open_url(), track_info.track_name_for_display())
         failure_str = ''
 
         if successes:
@@ -52,14 +52,14 @@ class SlackMessageFormatter(object):
             "accessory": {
                 "type": "image",
                 "image_url": track_info.track_image_url(),
-                "alt_text": track_info.get_track_name()
+                "alt_text": track_info.track_name_for_display()
             }
         }
 
     @classmethod
     def format_failed_search_results_message(cls, origin, target_platform):
         if isinstance(origin, TrackInfo):
-            origin_link = "*<%s|%s>*" % (origin.track_open_url(), origin.get_track_name())
+            origin_link = "*<%s|%s>*" % (origin.track_open_url(), origin.track_name_for_display())
             attempt_message = "Unable to find %s track for %s" % (
                 target_platform.name.title(),
                 origin_link

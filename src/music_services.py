@@ -65,7 +65,7 @@ class TrackInfo(object):
             if isinstance(self.artists, list):
                 return ", ".join(self.artists)
             else:
-                return ", ".join(self.artists.split(' '))
+               return self.artists
 
         return ''
 
@@ -87,7 +87,7 @@ class TrackInfo(object):
 
         return self.name
 
-    def get_track_name(self):
+    def track_name_for_display(self):
         if self.artists:
             return "%s - %s" % (self.name, self.artists_display_name())
 
@@ -101,7 +101,7 @@ class TrackInfo(object):
 
     def channel_title(self):
         if self.raw_json:
-            self.raw_json.get('channelTitle', '')
+            return self.raw_json.get('channelTitle', '')
 
         return ''
 

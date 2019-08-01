@@ -4,7 +4,7 @@ import unittest
 from spotipy.client import SpotifyException
 from fuzzywuzzy import fuzz
 
-from src.constants import DUPLICATE_TRACK, Platform
+from src.constants import BAD_WORDS, DUPLICATE_TRACK, Platform
 from src.models import Playlist
 from src.music_services import (
     ServiceFactory,
@@ -19,6 +19,7 @@ from tests.fakes import FakeSpotifyClient, FakeYoutubeClient
 from tests.json_fakes import (
     YOUTUBE_PLAYLIST_INSERT_RESPONSE,
     YOTUBE_SEARCH_LIST_RESPONSE,
+    YOUTUBE_VIDEOS_LIST_SINGLE_RESPONSE,
     SPOTIFY_TRACK_RESP,
     SPOTIFY_PLAYLIST_TRACKS_RESP,
 )
@@ -39,37 +40,170 @@ SPOTIFY_LINKS = [
 
 class TrackInfoTestCase(unittest.TestCase):
     def test_artists_display_name(self):
-        pass
+        track_info_no_artist = TrackInfo(
+            platform=Platform.YOUTUBE,
+            name='ok',
+            track_id='123'
+        )
+        self.assertEqual(track_info_no_artist.artists_display_name(), '')
+
+        track_info_list_of_artists = TrackInfo(
+            platform=Platform.YOUTUBE,
+            name='ok',
+            track_id='123',
+            artists=['foo', 'bar']
+        )
+        self.assertEqual(
+            track_info_list_of_artists.artists_display_name(),
+            "foo, bar"
+        )
+
+        track_info_artist_string = TrackInfo(
+            platform=Platform.YOUTUBE,
+            name='ok',
+            track_id='123',
+            artists='foo bar'
+        )
+        self.assertEqual(
+            track_info_artist_string.artists_display_name(),
+            'foo bar'
+        )
 
     def artists_for_search(self):
-        pass
+        self.assertEqual(
+            TrackInfo(
+                platform=Platform.YOUTUBE,
+                name='ok',
+                track_id='123',
+                artists=['foo', 'bar']
+            ).artists_for_search(),
+            ""
+        )
+
+        self.assertEqual(
+            TrackInfo(
+                platform=Platform.SPOTIFY,
+                name='ok',
+                track_id='123',
+                artists=['foo', 'bar']
+            ).artists_for_search(),
+            "foo bar"
+        )
 
     def test_track_name_for_comparison(self):
-        pass
+        # should sanitize title and append artists without commas
+        track_name = "This Love [%s] (%s)" % (BAD_WORDS[0], BAD_WORDS[1])
+        artists = ["Maroon 5", "Kabir"]
+        
+        self.assertEqual(
+            TrackInfo(
+                platform=Platform.SPOTIFY,
+                name=track_name,
+                track_id='123',
+                artists=artists
+            ).track_name_for_comparison(),
+            "This Love Maroon 5 Kabir"
+        )
 
-    def test_get_track_name(self):
-        pass
+    def test_track_name_for_display(self):
+        track_name = "This Love [%s] (%s)" % (BAD_WORDS[0], BAD_WORDS[1])
+        artists = ["Maroon 5", "Kabir"]
+        
+        self.assertEqual(
+            TrackInfo(
+                platform=Platform.SPOTIFY,
+                name=track_name,
+                track_id='123',
+                artists=artists
+            ).track_name_for_display(),
+            "%s - %s" % (track_name, ", ".join(artists))
+        )
 
     def test_description(self):
-        pass
+        self.assertEqual(
+            TrackInfo(
+                platform=Platform.SPOTIFY,
+                name="ok",
+                track_id='123',
+                artists=["ok"]
+            ).description(),
+            ""
+        )
+        
+        self.assertEqual(
+            TrackInfo(
+                platform=Platform.YOUTUBE,
+                name="ok",
+                track_id='123',
+                raw_json=YOUTUBE_VIDEOS_LIST_SINGLE_RESPONSE['items'][0]['snippet']
+            ).description(),
+            "It's fuckin' Maroon 5!"
+        )
 
     def test_channel_title(self):
-        pass
+        self.assertEqual(
+            TrackInfo(
+                platform=Platform.YOUTUBE,
+                name="ok",
+                track_id='123',
+                raw_json=YOUTUBE_VIDEOS_LIST_SINGLE_RESPONSE['items'][0]['snippet']
+            ).channel_title(),
+            "Maroon5VEVO"
+        )
 
     def test_track_open_url_youtube(self):
-        pass
+        track_id = '123'
+        self.assertEqual(
+            TrackInfo(
+                platform=Platform.YOUTUBE,
+                name="ok",
+                track_id=track_id
+            ).track_open_url(),
+            "https://www.youtube.com/watch?v=%s" % track_id
+        )
+        self.assertEqual(
+            TrackInfo(
+                platform=Platform.SPOTIFY,
+                name="ok",
+                track_id=track_id
+            ).track_open_url(),
+            "https://open.spotify.com/track/%s" % track_id
+        )
 
-    def test_track_open_url_spotify(self):
-        pass
+    def test_track_image_url(self):
+        self.assertEqual(
+            TrackInfo(
+                platform=Platform.YOUTUBE,
+                name="ok",
+                track_id='123',
+                raw_json=YOUTUBE_VIDEOS_LIST_SINGLE_RESPONSE['items'][0]['snippet']
+            ).track_image_url(),
+            "https://i.ytimg.com/vi/XPpTgCho5ZA/default.jpg"
+        )
 
-    def test_track_image_url_youtube(self):
-        pass
-    
-    def test_track_image_url_spotify(self):
-        pass
+        self.assertEqual(
+            TrackInfo(
+                platform=Platform.SPOTIFY,
+                name="ok",
+                track_id='123',
+                raw_json=SPOTIFY_TRACK_RESP
+            ).track_image_url(),
+            "https://i.scdn.co/image/6ecbb6e0db1a5093bc58169b87beb19d2947ebdd"
+        )
 
-    def sanitized_track_name(self):
-        pass
+    def test_sanitized_track_name(self):
+        base_str = "Maroon  5 (YES) [123]"
+        for word in BAD_WORDS:
+            base_str += " %s" % word
+
+            self.assertEqual(
+                TrackInfo(
+                    platform=Platform.YOUTUBE,
+                    track_id='123',
+                    name=base_str
+                ).sanitized_track_name().strip(),
+                'Maroon 5'.strip()
+            )
 
 
 class ServiceFactoryTestCase(unittest.TestCase):

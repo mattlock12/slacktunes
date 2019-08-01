@@ -34,11 +34,12 @@ def fuzzy_search_from_string(track_name, artist, platform):
     return slacktunes_service.fuzzy_search(track_name=track_name, artist=artist)
 
 
-def fuzzy_search_from_track_info(track_info):
+def fuzzy_search_from_track_info(track_info, slacktunes_cross_service=None):
     cross_platform = Platform.SPOTIFY if track_info.platform is Platform.YOUTUBE else Platform.YOUTUBE
-    slacktunes_user = User.query.filter_by(is_service_user=True).first()
-    slacktunes_creds = slacktunes_user.credentials_for_platform(cross_platform)
-    slacktunes_cross_service = ServiceFactory.from_enum(cross_platform)(credentials=slacktunes_creds)
+    if not slacktunes_cross_service:
+        slacktunes_user = User.query.filter_by(is_service_user=True).first()
+        slacktunes_creds = slacktunes_user.credentials_for_platform(cross_platform)
+        slacktunes_cross_service = ServiceFactory.from_enum(cross_platform)(credentials=slacktunes_creds)
     
     return slacktunes_cross_service.fuzzy_search_from_track_info(track_info=track_info)
 

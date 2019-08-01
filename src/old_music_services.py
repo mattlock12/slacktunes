@@ -51,7 +51,7 @@ class TrackInfo(object):
 
         return self.name
 
-    def get_track_name(self):
+    def track_name_for_display(self):
         if self.artists:
             return "%s - %s" % (self.name, self.artists_display_name())
 
@@ -434,7 +434,7 @@ class Youtube(ServiceBase):
         return service.search().list(q=search_string, **search_kwargs).execute()
 
     def get_native_track_info_from_track_info(self, track_info, is_spotify=False):
-        results = self.search(search_string=track_info.get_track_name())
+        results = self.search(search_string=track_info.track_name_for_display())
         if not results['items']:
             return None
 
@@ -444,7 +444,7 @@ class Youtube(ServiceBase):
 
         best_result = (None, 0)
         for item in items:
-            contender = fuzz.token_set_ratio(track_info.get_track_name(), item['snippet']['title'])
+            contender = fuzz.token_set_ratio(track_info.track_name_for_display(), item['snippet']['title'])
             if contender > best_result[1] and contender > 85:
                 best_result = (item, contender)
 
