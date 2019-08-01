@@ -18,7 +18,7 @@ ngrok http 8080
 ```
 which will output a url that will hereby referred to as `ngrok_url`
 
-Add `ngrok_url` to your `dev.env` as `NGROK_URL` 
+Add `ngrok_url` to your `dev.env` as `BASE_URI` 
 
 ### NOTE:
 Every time you shut down ngrok and restart it, ngrok will generate a new url and you'll have to change any place you're using `ngrok_url`
@@ -39,9 +39,7 @@ docker-compose up -d
 
 To create the initial test db:
 ```
-docker-compose exec -it slacktunes_backend /bin/bash
-
-flask db upgrade
+docker-compose exec -it slacktunes_backend flask db upgrade
 ```
 
 Your app should now be running! But it needs more setup. Visit `localhost:8080` and also `ngrok_url` in your browser to check that everything is working.
@@ -96,7 +94,7 @@ Request URL: <ngrok_url>/create_playlist/
 ##### Event Subscriptions
 Turn Event Subscriptions on. Slacktunes needs to subscribe to the `link_shared` event.
 
-Change the `Request URL` to your `ngrok_url`
+Change the `Request URL` to your `<ngrok_url>/slack_events/`
 
 Slack also requires you to define up to 5 domains which will trigger the `link_shared` event. Slacktunes needs:
 * youtube.com
@@ -125,6 +123,14 @@ SPOTIFY_CLIENT_SECRET = <your_spotify_client_secret>
 YOUTUBE_CLIENT_ID = <your_youtube_client_id>
 YOUTUBE_CLIENT_SECRET = <your_youtube_client_secret>
 ```
+#### Setting up a Service User
+Slacktunes uses a 'Service User' to perform searches for cross-platform adding. This is just a regular User with the `is_service_user` attribute set to `True`.
+
+The easiest way to set up this Service User for local dev-ing is to:
+1. `/create_playlist` and follow instructions to auth. This will create a User and store credentials for Youtube.
+1. `/create_playlist something s` and follow instructions to add credentials for Spotify
+1. `docker exec -it slacktunes_backend python -c 'from src.models import User;u = User.query.first();u.is_service_user = True;u.save()` to set your User as the Service User
+
 
 #### That's it!
 Give it a `docker-compose restart` and you should be good to go!
