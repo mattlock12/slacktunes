@@ -1,4 +1,4 @@
-#Slacktunes
+# Slacktunes
 
 Adds youtube or spotify links shared on slack to a youtube or spotify playlist
 
@@ -18,7 +18,7 @@ ngrok http 8080
 ```
 which will output a url that will hereby referred to as `ngrok_url`
 
-Add `ngrok_url` to your `dev.env` as `BASE_URI` 
+Add `ngrok_url` to your `dev.env` as `BASE_URI`
 
 ### NOTE:
 Every time you shut down ngrok and restart it, ngrok will generate a new url and you'll have to change any place you're using `ngrok_url`
