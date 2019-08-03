@@ -8,11 +8,11 @@ from app import application, db
 
 
 class DatabaseTestBase(unittest.TestCase):
-    
-    def setUp(self):     
+
+    def setUp(self):
         application.config['TESTING'] = True
         application.config['DEBUG'] = False
-        application.config['SQLALCHEMY_DATABASE_URI'] = "sqlite:///test.db"   
+        application.config['SQLALCHEMY_DATABASE_URI'] = "sqlite:///test.db"
         db.drop_all()
         db.create_all()
 

@@ -530,7 +530,7 @@ YOTUBE_SEARCH_LIST_RESPONSE = {
                 },
                 "channelTitle": "Maroon5VEVO",
                 "liveBroadcastContent": "none"
-            }       
+            }
         },
         {
             "kind": "youtube#searchResult",

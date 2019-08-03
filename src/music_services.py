@@ -31,7 +31,7 @@ class NoCredentialsError(Exception):
     pass
 
 
-class SimpleJSONWrapper(object):
+class SimpleJSONWrapper():
     def __init__(self, data_dict):
         self.data_dict = data_dict
 
@@ -39,16 +39,16 @@ class SimpleJSONWrapper(object):
         return json.dumps(self.data_dict)
 
 
-def credentials_required(f):
-    @wraps(f)
+def credentials_required(func):
+    @wraps(func)
     def decorated_function(cls_or_self, *args, **kwargs):
         if not cls_or_self.credentials:
             raise NoCredentialsError
-        return f(cls_or_self, *args, **kwargs)
+        return func(cls_or_self, *args, **kwargs)
     return decorated_function
 
 
-class TrackInfo(object):
+class TrackInfo():
     def __init__(self, name, platform, raw_json=None, artists=None, track_id=None, link=None):
         self.name = name
         if isinstance(platform, Platform):
@@ -64,8 +64,8 @@ class TrackInfo(object):
         if self.artists:
             if isinstance(self.artists, list):
                 return ", ".join(self.artists)
-            else:
-               return self.artists
+
+            return self.artists
 
         return ''
 
@@ -108,7 +108,7 @@ class TrackInfo(object):
     def track_open_url(self):
         if self.link:
             return self.link
-        
+
         if self.platform is Platform.YOUTUBE:
             return "https://www.youtube.com/watch?v=%s" % self.track_id
         elif self.platform is Platform.SPOTIFY:
@@ -126,7 +126,7 @@ class TrackInfo(object):
             images = self.raw_json.get('album', {}).get('images', None)
             if not images:
                 return 'nope'
-            
+
             return  min(images, key=lambda im: im['height']).get('url', 'nope')
         else:
             return 'nope'
@@ -144,7 +144,7 @@ class TrackInfo(object):
         return new_title
 
 
-class ServiceFactory(object):
+class ServiceFactory():
     @classmethod
     def from_string(cls, string):
         if string.lower()[0] == 'y':
@@ -173,11 +173,11 @@ class ServiceFactory(object):
             raise InvalidEnumException
 
 
-class ServiceBase(object, metaclass=abc.ABCMeta):
+class ServiceBase(metaclass=abc.ABCMeta):
     def __init__(self, credentials, client=None):
         self.credentials = credentials
         self.client = client
-    
+
     @abc.abstractclassmethod
     def get_flow(cls):
         raise NotImplementedError()
@@ -205,15 +205,15 @@ class ServiceBase(object, metaclass=abc.ABCMeta):
     @abc.abstractmethod
     def is_track_in_playlist(self, track_info, playlist):
         raise NotImplementedError()
-    
+
     @abc.abstractmethod
     def add_track_to_playlist(self, track_info, playlist):
         raise NotImplementedError()
 
-    @abc.abstractclassmethod
+    @abc.abstractmethod
     def best_match(self, target_string, search_results, track_info=None):
         raise NotImplementedError()
-    
+
     @abc.abstractmethod
     def fuzzy_search(self, track_name, artist):
         raise NotImplementedError()
@@ -266,12 +266,12 @@ class YoutubeService(ServiceBase):
 
         http_auth = self.credentials.authorize(httplib2.Http())
         return build(self.API_SERVICE_NAME, self.API_VERSION, http=http_auth)
-    
+
     def get_track_info_from_link(self, link):
         if 'yout' not in link:
             # TODO
             return False
-        
+
         video_id = None
         if "v=" in link:
             link.split('?')
@@ -293,9 +293,9 @@ class YoutubeService(ServiceBase):
         if not items or len(items) > 1:
             # TODO: what do here?
             return False
-        
+
         track = items[0]
-        
+
         return TrackInfo(
             track_id=video_id,
             platform=Platform.YOUTUBE,
@@ -313,7 +313,7 @@ class YoutubeService(ServiceBase):
         }
         if track_id:
             list_kwargs['videoId'] = track_id
-        
+
         list_kwargs.update(**kwargs)
 
         track_ids = set()
@@ -333,8 +333,9 @@ class YoutubeService(ServiceBase):
         return track_ids
 
     def is_track_in_playlist(self, track_info, playlist):
-        return track_info.track_id in self.get_track_ids_in_playlist(playlist=playlist, track_id=track_info.track_id)
-    
+        return track_info.track_id in self.get_track_ids_in_playlist(
+            'playlist=playlist, track_id=track_info.track_id')
+
     def add_track_to_playlist(self, track_info, playlist):
         client = self.get_wrapped_client()
 
@@ -353,13 +354,13 @@ class YoutubeService(ServiceBase):
         }
 
         try:
-            resp = client.playlistItems().insert(part='snippet', body=resource_body).execute()
+            client.playlistItems().insert(part='snippet', body=resource_body).execute()
         except Exception as e:
             # TODO: better exception handling
             return False, str(e)
-        
+
         return True, None
-    
+
 
     def best_match(self, target_string, search_results, track_info=None):
         best_result = (None, 0)
@@ -408,7 +409,7 @@ class YoutubeService(ServiceBase):
 
     def fuzzy_search_from_track_info(self, track_info):
         return self.fuzzy_search(track_name=track_info.track_name_for_comparison())
-        
+
     def list_playlists(self):
         client = self.get_wrapped_client()
 
@@ -421,7 +422,7 @@ class YoutubeService(ServiceBase):
             playlists_request = client.playlists().list_next(playlists_request, playlists_response)
 
         return playlists
-    
+
     def create_playlist(self, playlist_name):
         client = self.get_wrapped_client()
 
@@ -463,7 +464,7 @@ class SpotifyService(ServiceBase):
 
     def __init__(self, *args, **kwargs):
         user_info = kwargs.pop('user_info', None)
-        
+
         super(SpotifyService, self).__init__(*args, **kwargs)
 
         self.user_info = user_info
@@ -494,9 +495,9 @@ class SpotifyService(ServiceBase):
     def get_wrapped_client(self):
         if self.client:
             return self.client
-        
+
         credentials_manager = SpotipyClientCredentialsManager(credentials=self.credentials)
-        
+
         client = Spotipy(client_credentials_manager=credentials_manager)
         self.client = client
         return client
@@ -505,11 +506,11 @@ class SpotifyService(ServiceBase):
     def get_user_info(self):
         if self.user_info:
             return self.user_info
-        
+
         client = self.get_wrapped_client()
         user_info = client.me()
         self.user_info = user_info
-        
+
         return user_info
 
     def get_track_info_from_link(self, link):
@@ -537,17 +538,17 @@ class SpotifyService(ServiceBase):
             raw_json=resp,
             artists=[a['name'] for a in resp['artists']]
         )
-    
+
     def get_track_ids_in_playlist(self, playlist, track_id=None):
         client = self.get_wrapped_client()
-        
+
         track_ids = set()
         tracks_request = client.user_playlist_tracks(
             user=self.get_user_info()['id'],
             playlist_id=playlist.platform_id
         )
         while tracks_request:
-            track_ids= track_ids.union({t['track']['id'] for t in tracks_request['items']})
+            track_ids = track_ids.union({t['track']['id'] for t in tracks_request['items']})
 
             tracks_request = client.next(tracks_request)
 
@@ -555,13 +556,13 @@ class SpotifyService(ServiceBase):
 
     def is_track_in_playlist(self, track_info, playlist):
         return track_info.track_id in self.get_track_ids_in_playlist(playlist=playlist)
-    
+
     def add_track_to_playlist(self, track_info, playlist):
         client = self.get_wrapped_client()
-        
+
         if self.is_track_in_playlist(track_info=track_info, playlist=playlist):
             return False, DUPLICATE_TRACK
-        
+
         try:
             resp = client.user_playlist_add_tracks(
                 user=self.get_user_info()['id'],
@@ -586,11 +587,11 @@ class SpotifyService(ServiceBase):
             'type': 'track',
             'limit': 50
         }
-        
+
         search_string = "track: %s" % track_name
         if artist:
             search_string += " artist:%s" % artist
-        
+
         try:
             results = client.search(q=search_string, **search_kwargs)
         except Exception as e:
@@ -606,7 +607,7 @@ class SpotifyService(ServiceBase):
         target_string = "%s %s" % (track_name, artist)
 
         return self.best_match(target_string=target_string, search_results=results)
-    
+
     def fuzzy_search_from_track_info(self, track_info):
         return self.fuzzy_search(
             track_name=track_info.sanitized_track_name(),
@@ -616,7 +617,7 @@ class SpotifyService(ServiceBase):
     def best_match(self, target_string, search_results, track_info=None):
         """
         STAGE 1: a token_set_ratio
-        
+
         Check if the given name and artist combo at least form a set of the results
         """
         contenders = []
@@ -624,7 +625,10 @@ class SpotifyService(ServiceBase):
             contender_name = item['name']
             contender_artist = " ".join(a['name'] for a in item['artists'])
             # using set
-            contender = fuzz.token_set_ratio(target_string.lower(), ("%s %s" % (contender_name, contender_artist)).lower())
+            contender = fuzz.token_set_ratio(
+                target_string.lower(),
+                ("%s %s" % (contender_name, contender_artist)).lower()
+            )
             if contender >= best_score_so_far and contender > SPOTIFY_TOKEN_SET_THRESHHOLD:
                 best_score_so_far = contender
                 contenders.append(item)
@@ -644,7 +648,7 @@ class SpotifyService(ServiceBase):
 
         """
         STAGE 2: token_sort_ratio
-        
+
         If multiple contenders pass the token_set_ratio criteria, try a token_sort_ratio.
         How many transformations are necessary to change the source string to the target string?
         """
@@ -663,13 +667,13 @@ class SpotifyService(ServiceBase):
 
         highest_sort_score = max(sort_contenders, key=lambda b: b['sort_score'])['sort_score']
         best_contenders = [c for c in sort_contenders if c['sort_score'] == highest_sort_score]
-        
+
         if len(best_contenders) == 1:
             winner = best_contenders[0]
 
         """
         STAGE 3:
-        
+
         Multiple contenders have passed the token_sort_score check. We have to get craftier.
         If there is a track_info object and it's from Youtube, check the channelTitle and description
         for mentions of the artist name
@@ -680,10 +684,13 @@ class SpotifyService(ServiceBase):
             original_description = track_info.description().lower()
             for contender in best_contenders:
                 """
-                if we're here, it means comparing search_string to the artists from the spotify response didn't help differentiate.
+                if we're here, it means comparing search_string to the artists
+                from the spotify response didn't help differentiate.
                 To decide:
-                1. see if we can find the artist(s) name(s) in the description of the video; add +10 to the search score for that
-                2. see if we can find the artist(s) name(s) in the channel title (e.g., Maroon 5 Official); add +25 for that
+                1. see if we can find the artist(s) name(s) in the description of the video;
+                   add +10 to the search score for that
+                2. see if we can find the artist(s) name(s) in the channel title
+                   (e.g., Maroon 5 Official); add +25 for that
                 3. if there's still a tie, take the most popular one
                 """
                 current_score = 0
@@ -700,18 +707,22 @@ class SpotifyService(ServiceBase):
 
             if best_results_with_artist:
                 highest_best_result_with_artist_score = max(
-                    best_results_with_artist, key=lambda b: b['with_artist_score'])['with_artist_score']
-                winner = max([
-                    c for c in best_results_with_artist if c['with_artist_score'] >= highest_best_result_with_artist_score],
+                    best_results_with_artist,
+                    key=lambda b: b['with_artist_score'])['with_artist_score']
+                winner = max(
+                    [
+                        c for c in best_results_with_artist
+                        if c['with_artist_score'] >= highest_best_result_with_artist_score
+                    ],
                     key=lambda bra: bra['popularity']
-                ) 
+                )
         else:
             # No track_info to inspect; return the most popular
             winner = max(best_contenders, key=lambda b: b['popularity'])
 
         # Awkward. I guess everything is fucked
         if not winner:
-           return None
+            return None
 
         return TrackInfo(
             raw_json=winner,
@@ -720,7 +731,7 @@ class SpotifyService(ServiceBase):
             track_id=winner['id'],
             platform=Platform.SPOTIFY
         )
-    
+
     def list_playlists(self):
         client = self.get_wrapped_client()
 
@@ -736,7 +747,7 @@ class SpotifyService(ServiceBase):
             playlist_results = client.next(playlist_results)
 
         return playlists
-    
+
     def create_playlist(self, playlist_name):
         client = self.get_wrapped_client()
 
@@ -756,4 +767,3 @@ class SpotifyService(ServiceBase):
             return False, "Failed to create playlist"
 
         return True, playlist
-

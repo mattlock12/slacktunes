@@ -1,18 +1,23 @@
 import json
-
 import requests
+
 from flask import render_template, jsonify, redirect, request, url_for
 from functools import wraps
 
 
-from settings import BASE_URI, SLACK_CLIENT_ID, SLACK_CLIENT_SECRET, SLACK_OAUTH_TOKEN, SLACK_VERIFICATION_TOKEN
+from settings import (
+    BASE_URI,
+    SLACK_CLIENT_ID,
+    SLACK_CLIENT_SECRET,
+    SLACK_VERIFICATION_TOKEN,
+)
 
 from app import application, logger
 from .constants import InvalidEnumException, Platform, SlackUrl
 from .message_formatters import SlackMessageFormatter
 from .models import Credential, Playlist, User
-from .music_services import ServiceFactory, TrackInfo
-from .tasks import add_link_to_playlists, add_links_to_playlist, add_manual_track_to_playlists
+from .music_services import ServiceFactory
+from .tasks import add_link_to_playlists, add_manual_track_to_playlists
 
 
 # UTILITY DECORATOR
@@ -68,14 +73,14 @@ def slackoauth():
     r = requests.get(url=SlackUrl.OUATH_ACCESS.value, params=payload)
     if r.status_code == 200:
         return redirect(url_for('index'))
-    else:
-        return r.text, 500
+
+    return r.text, 500
 
 
 def credential_exchange(platform_enum):
     service = ServiceFactory.from_enum(platform_enum)
     code = request.args.get('code', None)
-    
+
     if not code:
         return "No code in request args", 400
 
@@ -97,7 +102,11 @@ def credential_exchange(platform_enum):
 
     creds = [creds for creds in user.credentials if creds.platform is platform_enum]
     if not creds:
-        user_credentials = Credential(user_id=user.id, platform=platform_enum, credentials=credentials.to_json())
+        user_credentials = Credential(
+            user_id=user.id,
+            platform=platform_enum,
+            credentials=credentials.to_json()
+        )
     else:
         user_credentials = creds[0]
         user_credentials.credentials = credentials.to_json()
@@ -124,8 +133,14 @@ def list_playlists():
     channel_id = request.form['channel_id']
 
     playlists = Playlist.query.filter_by(channel_id=channel_id).all()
-    playlists_with_platform = ["*%s* (%s)" % (pl.name, pl.platform.name.title()) for pl in playlists]
-    msg_body = "Found *%s* playlists in this channel: \n%s" % (len(playlists), "\n".join(playlists_with_platform))
+    playlists_with_platform = [
+        "*%s* (%s)" % (pl.name, pl.platform.name.title())
+        for pl in playlists
+    ]
+    msg_body = "Found *%s* playlists in this channel: \n%s" % (
+        len(playlists),
+        "\n".join(playlists_with_platform)
+    )
 
     SlackMessageFormatter.post_message(payload={"channel": channel_id, "text": msg_body})
 
@@ -161,15 +176,29 @@ def create_playlist():
     if not user:
         # prompt them to auth on the website
         state = "%s:%s" % (slack_user_id, slack_user_name)
-        return "No verified auth for %s. Please go to %s%s and allow access" % \
-               (slack_user_name, BASE_URI, url_for('auth', platform_str=platform_enum.name.lower(), userdata=state))
+        return "No verified auth for %s. Please go to %s%s and allow access" % (
+            slack_user_name,
+            BASE_URI,
+            url_for(
+                'auth',
+                platform_str=platform_enum.name.lower(),
+                userdata=state
+            )
+        )
 
     credentials = user.credentials_for_platform(platform=platform_enum)
     if not credentials:
         # prompt them to auth on the website
         state = "%s:%s" % (slack_user_id, slack_user_name)
-        return "No verified auth for %s. Please go to %s%s and allow access" % \
-               (slack_user_name, BASE_URI, url_for('auth', platform_str=platform_enum.name.lower(), userdata=state))
+        return "No verified auth for %s. Please go to %s%s and allow access" % (
+            slack_user_name,
+            BASE_URI,
+            url_for(
+                'auth',
+                platform_str=platform_enum.name.lower(),
+                userdata=state
+            )
+        )
 
     music_service = ServiceFactory.from_enum(platform_enum)(credentials=credentials)
 
@@ -205,44 +234,7 @@ def create_playlist():
 @verified_slack_request
 def scrape_music():
     # TODO
-    return "Coming soon", 200
-
-    channel_id = request.form['channel_id']
-    command_text_args = request.form['text'].split()
-
-    if not len(command_text_args):
-        return "Please specify a playlist name in your command", 200
-
-    playlist_name = command_text_args[0]
-    playlists = Playlist.query.filter_by(channel_id=channel_id, name=playlist_name).all()
-    if not playlists:
-        return "No playlist named %s in this channel..." % playlist_name, 200
-
-    if len(command_text_args) > 1:
-        pl_platform = Platform.from_string(command_text_args[1])
-
-        playlists = [pl for pl in playlists if pl.platform is pl_platform]    
-
-        if not playlists:
-            return "No %s playlist named %s in this channel..." % (pl_platform.name.title(), playlist_name), 200
-
-
-    playlist = playlists[0]
-    user = playlist.user
-    if not user or not user.credentials:
-        return "Somehow there is no user associated with this playlist... Can't auth with music service", 200
-
-    music_service = ServiceFactory.from_enum(playlist.platform)(credentials=user.credentials_for_platform(playlist.platform))
-    # TODO: more robust error handling here
-    if playlist.platform_id not in {pl['id'] for pl in music_service.list_playlists()}:
-        return "Remote playlist doesn't match local playlist...", 200
-
-    add_links_to_playlist.delay(
-        channel_id=channel_id,
-        playlist_id=playlist.id
-    )
-
-    return "Adding all links in this channel to Playlist %s %s. This might take a minute.", 200
+    return "Not yet supported in Slacktunes V3", 200
 
 
 @application.route("/delete_playlist/", methods=['POST'])
@@ -253,7 +245,7 @@ def delete_playlist():
     slack_user_id = request.form['user_id']
     command_text_args = request.form['text'].split()
 
-    if not command_text_args or len(command_text_args) < 1:
+    if not command_text_args:
         return "Specify the name and platform of the playlist to delete", 200
 
     playlist_name = command_text_args[0]
@@ -273,12 +265,24 @@ def delete_playlist():
         playlist_to_delete = [pl for pl in playlist_to_delete if pl.platform is platform_enum]
 
     if not playlist_to_delete:
-        existing_in_channel = "\n".join("%s (%s)" % (p.name, p.platform.name.title()) for p in playlists)
-        return "Couldn't find a playlist named %s... I see these: \n%s" % (playlist_name, existing_in_channel), 200
+        existing_in_channel = "\n".join(
+            "%s (%s)" % (p.name, p.platform.name.title())
+            for p in playlists
+        )
+        return (
+            "Couldn't find a playlist named %s... I see these: \n%s" % (
+                playlist_name,
+                existing_in_channel
+            ),
+            200
+        )
 
     if len(playlist_to_delete) > 1:
-        return "More than one playlist matching name %s ... Try specifying the platform" % playlist_name, 200 
-    
+        return (
+            "More than one playlist matching name %s ... Try specifying the platform" % playlist_name,
+            200
+        )
+
     playlist_to_delete = playlist_to_delete[0]
 
     platform = playlist_to_delete.platform
@@ -328,7 +332,7 @@ def add_track():
         filter_kwargs['platform'] = platform_enum
 
     playlists = Playlist.query.filter_by(**filter_kwargs).all()
-    
+
     if not playlists:
         return "No %splaylists found in channel%s" % (platform_formatted, pl_name_formatted), 200
 
@@ -365,13 +369,13 @@ def slack_events():
         return "Ok", 200
 
     channel = event.get('channel')
-    
+
     links = event.get('links')
     if not links:
         return "No links in event", 200
-    
+
     link = links[0].get('url')
-    
+
     # CELERY
     logger.info("Adding link %s to playilists" % link)
     add_link_to_playlists.delay(

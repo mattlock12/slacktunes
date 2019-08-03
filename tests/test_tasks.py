@@ -1,13 +1,12 @@
 import copy
 import json
-import unittest
-from unittest.mock import call, patch
+from unittest.mock import patch
 
 from tests.base import DatabaseTestBase
 from src.constants import Platform
 from src.message_formatters import SlackMessageFormatter
 from src.models import Credential, Playlist, User
-from src.music_services import ServiceFactory, TrackInfo, YoutubeService
+from src.music_services import TrackInfo
 from src.tasks import add_link_to_playlists, search_and_add_to_playlists
 
 
@@ -35,14 +34,14 @@ class TaskTestBase(DatabaseTestBase):
         self.user.is_service_user = True
         self.user.save()
 
-        self.yt_creds = Credential (
+        self.yt_creds = Credential(
             platform=Platform.YOUTUBE,
             credentials=json.dumps({'access_token': True}),
             user_id=self.user.id
         )
         self.yt_creds.save()
 
-        self.s_creds = Credential (
+        self.s_creds = Credential(
             platform=Platform.SPOTIFY,
             credentials=json.dumps({'access_token': True}),
             user_id=self.user.id
@@ -63,10 +62,10 @@ class TaskTestBase(DatabaseTestBase):
     def _make_playlists(self, channel_id, num_yt=0, num_spot=0, user=None):
         if not user:
             user = self.user
-    
+
         yt_playlists = []
         spot_playlists = []
-        
+
         for i in range(num_yt):
             ytpl = Playlist(
                 platform=Platform.YOUTUBE,
@@ -88,9 +87,8 @@ class TaskTestBase(DatabaseTestBase):
             )
             spl.save()
             spot_playlists.append(spl)
-        
-        return yt_playlists, spot_playlists
 
+        return yt_playlists, spot_playlists
 
 
 class TestAddTrackToPlaylistsTestCase(TaskTestBase):
@@ -99,7 +97,7 @@ class TestAddTrackToPlaylistsTestCase(TaskTestBase):
         channel_id = 'abc123'
         link_id = "123123"
         link = "https:youtube.co/watch?v=%s" % link_id
-        
+
         add_link_to_playlists(
             link=link,
             channel=channel_id
@@ -223,7 +221,7 @@ class SearchAndAddToPlaylistsTestCase(TaskTestBase):
 
         self.fuzzy_search_from_string_mock.return_value = None
         self.format_failed_search_results_message_mock.return_value = {'ok': 'ok'}
-        
+
         search_and_add_to_playlists(
             origin=origin,
             platform=Platform.SPOTIFY.name,
@@ -235,7 +233,7 @@ class SearchAndAddToPlaylistsTestCase(TaskTestBase):
             track_name=origin['track_name'],
             platform=Platform.SPOTIFY
         )
-        
+
         self.format_failed_search_results_message_mock.assert_called_once_with(
             origin=origin,
             target_platform=Platform.SPOTIFY
@@ -261,7 +259,7 @@ class SearchAndAddToPlaylistsTestCase(TaskTestBase):
 
         self.fuzzy_search_from_track_info_mock.return_value = None
         self.format_failed_search_results_message_mock.return_value = {'ok': 'ok'}
-        
+
         search_and_add_to_playlists(
             origin=yt_track_json,
             platform=Platform.SPOTIFY.name,
@@ -282,7 +280,7 @@ class SearchAndAddToPlaylistsTestCase(TaskTestBase):
         self.assertEqual(self.fuzzy_search_from_string_mock.call_count, 0)
         self.assertEqual(self.add_track_to_playlists_mock.call_count, 0)
         self.assertEqual(self.format_add_track_results_message_mock.call_count, 0)
-    
+
 
     def test_best_match(self):
         channel = '123'
@@ -295,7 +293,7 @@ class SearchAndAddToPlaylistsTestCase(TaskTestBase):
         self.fuzzy_search_from_string_mock.return_value = SP_TRACK_INFO
         self.add_track_to_playlists_mock.return_value = ([1], [2])
         self.format_add_track_results_message_mock.return_value = {'ok': 'ok'}
-        
+
         search_and_add_to_playlists(
             origin=origin,
             platform=Platform.SPOTIFY.name,

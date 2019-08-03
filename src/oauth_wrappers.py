@@ -9,7 +9,7 @@ from .models import User
 from settings import SPOTIFY_CLIENT_ID, SPOTIFY_CLIENT_SECRET, SPOTIFY_REDIRECT_URI
 
 
-class SpotipyClientCredentialsManager(object):
+class SpotipyClientCredentialsManager():
 
     def __init__(self, credentials):
         self.credentials = credentials
@@ -21,9 +21,11 @@ class SpotipyClientCredentialsManager(object):
 
     def get_access_token(self):
         if self._is_token_expired(self.credentials):
-            spotify_oauth = SpotipyDBWrapper(client_id=SPOTIFY_CLIENT_ID,
-                                             client_secret=SPOTIFY_CLIENT_SECRET,
-                                             redirect_uri=SPOTIFY_REDIRECT_URI)
+            spotify_oauth = SpotipyDBWrapper(
+                client_id=SPOTIFY_CLIENT_ID,
+                client_secret=SPOTIFY_CLIENT_SECRET,
+                redirect_uri=SPOTIFY_REDIRECT_URI
+            )
             refresh_credentials = spotify_oauth.refresh_access_token(self.credentials['refresh_token'])
             slack_id, slack_user_name = self.credentials['userdata'].split(':')
             user = User.query.filter_by(slack_id=slack_id).first()
@@ -48,7 +50,9 @@ class SpotipyDBWrapper(oauth2.SpotifyOAuth):
             self.creds.credentials = json.dumps(token_info)
 
     def _add_custom_values_to_token_info(self, token_info):
-        token_info = super(SpotipyDBWrapper, self)._add_custom_values_to_token_info(token_info=token_info)
+        token_info = super(SpotipyDBWrapper, self)._add_custom_values_to_token_info(
+            token_info=token_info
+        )
 
         if self.state:
             token_info['userdata'] = self.state

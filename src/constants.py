@@ -37,4 +37,18 @@ class Platform(Enum):
             return None
 
 
-BAD_WORDS = ['EP', 'Full', 'Official', 'Lyrics', 'Lyric', 'Video', 'Album', 'HD', 'SD', 'HQ', 'by', 'single', 'version']
+BAD_WORDS = [
+    'EP',
+    'Full',
+    'Official',
+    'Lyrics',
+    'Lyric',
+    'Video',
+    'Album',
+    'HD',
+    'SD',
+    'HQ',
+    'by',
+    'single',
+    'version',
+]

@@ -12,7 +12,7 @@ def now():
     datetime.datetime.now()
 
 
-class BaseModelMixin(object):
+class BaseModelMixin():
     def __rep__(self):
         return "<%s  %s>" % (self.__class__.__name__, self.id)
 
@@ -35,7 +35,13 @@ class Playlist(db.Model, BaseModelMixin):
     user_id = db.Column(db.Integer, db.ForeignKey('user.id'))
     user = db.relationship('User', backref=db.backref('playlists', lazy='dynamic'))
 
-    __table_args__ = (UniqueConstraint('platform', 'platform_id', name='_platform_platformid_constraint'),)
+    __table_args__ = (
+        UniqueConstraint(
+            'platform',
+            'platform_id',
+            name='_platform_platformid_constraint'
+        ),
+    )
 
     def __init__(self, name, channel_id, platform, platform_id, user_id):
         self.name = name
@@ -85,4 +91,5 @@ class Credential(db.Model, BaseModelMixin):
             return OAuth2Credentials.from_json(self.credentials)
         elif self.platform is Platform.SPOTIFY:
             return json.loads(self.credentials)
-
+        else:
+            return None

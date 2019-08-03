@@ -12,8 +12,6 @@ from src.music_services import (
     TrackInfo,
     YoutubeService,
     YOUTUBE_TOKEN_SET_THRESHHOLD,
-    SPOTIFY_TOKEN_SET_THRESHHOLD,
-    SPOTIFY_TOKEN_SORT_THRESHHOLD
 )
 from tests.fakes import FakeSpotifyClient, FakeYoutubeClient
 from tests.json_fakes import (
@@ -94,7 +92,7 @@ class TrackInfoTestCase(unittest.TestCase):
         # should sanitize title and append artists without commas
         track_name = "This Love [%s] (%s)" % (BAD_WORDS[0], BAD_WORDS[1])
         artists = ["Maroon 5", "Kabir"]
-        
+
         self.assertEqual(
             TrackInfo(
                 platform=Platform.SPOTIFY,
@@ -108,7 +106,7 @@ class TrackInfoTestCase(unittest.TestCase):
     def test_track_name_for_display(self):
         track_name = "This Love [%s] (%s)" % (BAD_WORDS[0], BAD_WORDS[1])
         artists = ["Maroon 5", "Kabir"]
-        
+
         self.assertEqual(
             TrackInfo(
                 platform=Platform.SPOTIFY,
@@ -129,7 +127,7 @@ class TrackInfoTestCase(unittest.TestCase):
             ).description(),
             ""
         )
-        
+
         self.assertEqual(
             TrackInfo(
                 platform=Platform.YOUTUBE,
@@ -208,7 +206,7 @@ class TrackInfoTestCase(unittest.TestCase):
 
 class ServiceFactoryTestCase(unittest.TestCase):
     def test_from_string(self):
-        for yt_string in ['y','Y']:
+        for yt_string in ['y', 'Y']:
             self.assertEqual(
                 ServiceFactory.from_string(yt_string),
                 YoutubeService
@@ -304,12 +302,12 @@ class YoutubeServiceTestCase(unittest.TestCase):
             track_info=self.track_info,
             playlist=self.playlist
         ))
-    
+
     def test_is_track_in_playlist_and_it_is_not(self):
         self.assertFalse(self.service.is_track_in_playlist(
             track_info=TrackInfo(name='nah', platform=Platform.YOUTUBE, track_id='nah'),
             playlist=self.playlist
-        ))    
+        ))
 
     def test_add_track_to_playlist_fails_error(self):
         def raise_exception():
@@ -331,7 +329,7 @@ class YoutubeServiceTestCase(unittest.TestCase):
             service.add_track_to_playlist(track_info=self.track_info, playlist=self.playlist),
             (False, 'nope')
         )
-    
+
     def test_add_track_to_playlist_fails_duplicate(self):
         self.assertEqual(
             self.service.add_track_to_playlist(track_info=self.track_info, playlist=self.playlist),
@@ -374,10 +372,10 @@ class YoutubeServiceTestCase(unittest.TestCase):
             current_name = item['snippet']['title']
             while fuzz.token_set_ratio(target, current_name) >= YOUTUBE_TOKEN_SET_THRESHHOLD:
                 current_name += "a"
-            
+
             item['snippet']['title'] = current_name
             bad_items.append(item)
-        
+
         fake_client = FakeYoutubeClient()
         service = YoutubeService(credentials={'ok': True}, client=fake_client)
 
@@ -394,17 +392,17 @@ class YoutubeServiceTestCase(unittest.TestCase):
             current_name = target
             while fuzz.token_set_ratio(target, current_name) >= YOUTUBE_TOKEN_SET_THRESHHOLD:
                 current_name += "a"
-            
+
             item['snippet']['title'] = current_name
             bad_items.append(item)
-        
+
         # make one item that's good
         good_item = items[-1]
         # don't make it perfect, for some reason
         pretty_good_title = target + 'a'
         good_item['snippet']['title'] = pretty_good_title
         bad_items.append(good_item)
-        
+
         fake_client = FakeYoutubeClient()
         service = YoutubeService(credentials={'ok': True}, client=fake_client)
         match = service.best_match(target_string=target, search_results=bad_items)
@@ -435,7 +433,7 @@ class YoutubeServiceTestCase(unittest.TestCase):
             {
                 'items': [
                     {
-                        'snippet': { 'title': self.playlist.name }
+                        'snippet': {'title': self.playlist.name}
                     }
                 ]
             }
@@ -444,15 +442,15 @@ class YoutubeServiceTestCase(unittest.TestCase):
 
         self.assertTrue(service.create_playlist(playlist_name=self.playlist.name))
         self.assertEqual(fake_client.playlist_item_insert_calls, [])
-    
+
     def test_create_playlist(self):
         title = 'sure thing'
         res = self.service.create_playlist(playlist_name=title)
-        
+
         expected_res = copy.deepcopy(YOUTUBE_PLAYLIST_INSERT_RESPONSE)
         expected_res['snippet']['title'] = title
         expected_res['snippet']['localized']['title'] = title
-        
+
         self.assertEqual((True, expected_res), res)
         self.assertTrue(self.service.client.playlist_insert_calls, [title])
 
@@ -477,7 +475,7 @@ class SpotifyServiceTestCase(unittest.TestCase):
             platform=Platform.SPOTIFY,
             track_id="aaa"
         )
-    
+
     def test_get_track_info_from_link_desktop(self):
         info = self.service.get_track_info_from_link(link=SPOTIFY_LINK_DESKTOP)
 
@@ -501,11 +499,13 @@ class SpotifyServiceTestCase(unittest.TestCase):
     def test_is_track_in_playlist_is_in_playlist(self):
         # cheat because I know this id is in the json fakes
         self.track_info.track_id = '6ECp64rv50XVz93WvxXMGF'
-        self.assertTrue(self.service.is_track_in_playlist(track_info=self.track_info, playlist=self.playlist))
+        self.assertTrue(self.service.is_track_in_playlist(
+            track_info=self.track_info, playlist=self.playlist))
 
     def test_is_track_in_playlist_is_not_in_playlist(self):
         self.track_info.track_id = 'nope'
-        self.assertFalse(self.service.is_track_in_playlist(track_info=self.track_info, playlist=self.playlist))
+        self.assertFalse(self.service.is_track_in_playlist(
+            track_info=self.track_info, playlist=self.playlist))
 
 
     def test_list_playlists_no_user_info(self):
@@ -529,7 +529,7 @@ class SpotifyServiceTestCase(unittest.TestCase):
     def test_add_track_to_playlist_exception(self):
         def raiser():
             raise Exception('nope')
-        
+
         def s_raiser():
             raise SpotifyException(code=1, msg='snope', http_status=500)
 
@@ -537,15 +537,27 @@ class SpotifyServiceTestCase(unittest.TestCase):
             'user_playlist_add_tracks': raiser
         })
         exc_service = SpotifyService(credentials={'ok': True}, client=fake_client)
-        
+
         fake_client_spotify_error = FakeSpotifyClient(expected_responses={
             'user_playlist_add_tracks': s_raiser
         })
         sexc_service = SpotifyService(credentials={'ok': True}, client=fake_client_spotify_error)
 
-        self.assertEqual((False, 'nope'), exc_service.add_track_to_playlist(playlist=self.playlist, track_info=self.track_info))
-        self.assertEqual((False, 'snope'), sexc_service.add_track_to_playlist(playlist=self.playlist, track_info=self.track_info))
-    
+        self.assertEqual(
+            (False, 'nope'),
+            exc_service.add_track_to_playlist(
+                playlist=self.playlist,
+                track_info=self.track_info
+            )
+        )
+        self.assertEqual(
+            (False, 'snope'),
+            sexc_service.add_track_to_playlist(
+                playlist=self.playlist,
+                track_info=self.track_info
+            )
+        )
+
     def test_add_track_to_playlist_bad_resp(self):
         fake_client = FakeSpotifyClient(expected_responses={
             'user_playlist_add_tracks': {'nope': False}
@@ -559,7 +571,7 @@ class SpotifyServiceTestCase(unittest.TestCase):
 
     def test_add_track_to_playlist(self):
         self.track_info.track_id = 'foobar'
-        
+
         self.assertEqual(
             (True, None),
             self.service.add_track_to_playlist(track_info=self.track_info, playlist=self.playlist)
@@ -577,7 +589,7 @@ class SpotifyServiceTestCase(unittest.TestCase):
 
         self.assertEqual(
             (False, "Could not find info for this user"),
-            service.create_playlist(playlist_name='ok')            
+            service.create_playlist(playlist_name='ok')
         )
 
     def test_create_playlist_dupe_playlist(self):
@@ -587,11 +599,11 @@ class SpotifyServiceTestCase(unittest.TestCase):
             (True, {'name': 'Playlist1'}),
             self.service.create_playlist(playlist_name=dupe_name)
         )
-    
+
     def test_create_playlist_create_exception(self):
         def raiser():
             raise Exception("Nope")
-        
+
         fake_client = FakeSpotifyClient(expected_responses={
             'user_playlist_create': raiser
         })
@@ -606,7 +618,7 @@ class SpotifyServiceTestCase(unittest.TestCase):
 
     def test_create_playlist(self):
         pl_name = 'ok'
-        
+
         # don't want results from .next()
         self.service.client.nexted = True
         self.assertEqual(
@@ -618,11 +630,11 @@ class SpotifyServiceTestCase(unittest.TestCase):
 class SpotifyClientFuzzyMatchTestCase(unittest.TestCase):
     def test_fuzzy_search_for_track_bad_results(self):
         pass
-    
+
     # ====== token set stage =====
     def test_fuzzy_search_for_track_token_set_no_contenders(self):
         pass
-    
+
     def test_fuzzy_search_for_track_token_set_one_contender(self):
         pass
 
