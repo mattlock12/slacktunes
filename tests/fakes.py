@@ -43,13 +43,10 @@ class FakeYoutubeClient(object):
         class FakeVideosList(object):
             @classmethod
             def list(cls, part, id, *args, **kwargs):
-                if 'videos_list' in self.expected_responses:
-                    # might be an exception
-                    if callable(expected_response):
-                        expected_response()
-                    return expected_response
-
-                return YOUTUBE_VIDEOS_LIST_SINGLE_RESPONSE
+                return get_yerself_an_executor(
+                    expected=expected_response,
+                    default=YOUTUBE_VIDEOS_LIST_SINGLE_RESPONSE
+                )
 
         return FakeVideosList
 

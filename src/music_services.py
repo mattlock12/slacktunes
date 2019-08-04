@@ -82,8 +82,14 @@ class TrackInfo():
         return self.artists
 
     def track_name_for_comparison(self):
+        """
+        NOTE: We are intentionally using the raw name here and not the sanitized_track_name
+        because we assume intention on the part of the user who shared the link or entered
+        the manual name and even if there is garbage in the title, it should affect all
+        comparisons equally
+        """
         if self.artists:
-            return ("%s %s" % (self.sanitized_track_name(), self.artists_for_search())).strip()
+            return ("%s %s" % (self.name, self.artists_for_search())).strip()
 
         return self.name
 
@@ -265,7 +271,12 @@ class YoutubeService(ServiceBase):
             return self.client
 
         http_auth = self.credentials.authorize(httplib2.Http())
-        return build(self.API_SERVICE_NAME, self.API_VERSION, http=http_auth)
+        return build(
+            self.API_SERVICE_NAME,
+            self.API_VERSION,
+            http=http_auth,
+            cache_discovery=False
+        )
 
     def get_track_info_from_link(self, link):
         if 'yout' not in link:
@@ -288,7 +299,7 @@ class YoutubeService(ServiceBase):
             video_id = link[0].split('be/')[1]
 
         client = self.get_wrapped_client()
-        resp = client.videos().list(part='snippet', id=video_id)
+        resp = client.videos().list(part='snippet', id=video_id).execute()
         items = resp.get('items', {})
         if not items or len(items) > 1:
             # TODO: what do here?
@@ -334,7 +345,7 @@ class YoutubeService(ServiceBase):
 
     def is_track_in_playlist(self, track_info, playlist):
         return track_info.track_id in self.get_track_ids_in_playlist(
-            'playlist=playlist, track_id=track_info.track_id')
+            playlist=playlist, track_id=track_info.track_id)
 
     def add_track_to_playlist(self, track_info, playlist):
         client = self.get_wrapped_client()
@@ -580,7 +591,7 @@ class SpotifyService(ServiceBase):
 
         return True, None
 
-    def fuzzy_search(self, track_name, artist=None):
+    def search(self, track_name, artist=None):
         client = self.get_wrapped_client()
         search_kwargs = {
             'market': 'US',
@@ -588,9 +599,9 @@ class SpotifyService(ServiceBase):
             'limit': 50
         }
 
-        search_string = "track: %s" % track_name
+        search_string = track_name
         if artist:
-            search_string += " artist:%s" % artist
+            search_string += "track:%s artist:%s" % (track_name, artist)
 
         try:
             results = client.search(q=search_string, **search_kwargs)
@@ -603,15 +614,40 @@ class SpotifyService(ServiceBase):
         if not results.get('tracks', {}).get('items'):
             return None
 
-        results = results['tracks']['items']
-        target_string = "%s %s" % (track_name, artist)
+        return results['tracks']['items']
+
+    def fuzzy_search(self, track_name, artist=None):
+        results = self.search(track_name=track_name, artist=artist)
+        target_string = ("%s %s" % (track_name, artist)).strip()
 
         return self.best_match(target_string=target_string, search_results=results)
 
     def fuzzy_search_from_track_info(self, track_info):
-        return self.fuzzy_search(
+        """
+        NOTE: In a previous commit of Slacktunes v3, I searched AND compared using
+        the sanitized_track_name (or rather, track_name_for_comparison, which used
+        sanitized_track_name and artists_for_search -- which is stupid in its own
+        right because we already know there will never be an artist returned from
+        a Youtube TrackInfo object).
+        However, in this current version, we are searching using the sanitized object,
+        and then comparing using the full title. This is useful in the case of things
+        like [REMIX]es where the intention of the user was to share a modified version
+        of the track. In my experience, the results Spotify search algorithm benefit
+        more from clarity of title and artist, but will still return the (in this case)
+        remix version of the track.
+        Then, when comparing the tracks, leave any of the Youtube title garbage in
+        because in the best case it's important to differentiate and in the worst case
+        will affect all matching scores equally.
+        """
+        results = self.search(
             track_name=track_info.sanitized_track_name(),
             artist=track_info.artists_for_search()
+        )
+
+        return self.best_match(
+            target_string=track_info.track_name_for_comparison(),
+            search_results=results,
+            track_info=track_info
         )
 
     def best_match(self, target_string, search_results, track_info=None):
@@ -621,16 +657,15 @@ class SpotifyService(ServiceBase):
         Check if the given name and artist combo at least form a set of the results
         """
         contenders = []
+        best_score_so_far = 0
         for item in search_results:
             contender_name = item['name']
             contender_artist = " ".join(a['name'] for a in item['artists'])
+            contender_string = ("%s %s" % (contender_name, contender_artist)).lower()
             # using set
-            contender = fuzz.token_set_ratio(
-                target_string.lower(),
-                ("%s %s" % (contender_name, contender_artist)).lower()
-            )
-            if contender >= best_score_so_far and contender > SPOTIFY_TOKEN_SET_THRESHHOLD:
-                best_score_so_far = contender
+            contender_score = fuzz.token_set_ratio(target_string.lower(), contender_string)
+            if contender_score >= best_score_so_far and contender_score > SPOTIFY_TOKEN_SET_THRESHHOLD:
+                best_score_so_far = contender_score
                 contenders.append(item)
 
         if not contenders:
@@ -657,68 +692,92 @@ class SpotifyService(ServiceBase):
         for contender in contenders:
             contender_name = contender['name']
             contender_artist = " ".join(a['name'] for a in contender['artists'])
+            contender_string = ("%s %s" % (contender_name, contender_artist)).lower()
             # using sort
-            sort_score = fuzz.token_sort_ratio(
-                target_string.lower(), ("%s %s" % (contender_name, contender_artist)).lower())
+            sort_score = fuzz.token_sort_ratio(target_string.lower(), contender_string)
             if sort_score >= best_sort_score_so_far and sort_score > SPOTIFY_TOKEN_SORT_THRESHHOLD:
                 contender['sort_score'] = sort_score
                 best_sort_score_so_far = sort_score
                 sort_contenders.append(contender)
 
-        highest_sort_score = max(sort_contenders, key=lambda b: b['sort_score'])['sort_score']
-        best_contenders = [c for c in sort_contenders if c['sort_score'] == highest_sort_score]
+        # did any results pass the token sort threshold?
+        if sort_contenders:
+            highest_sort_score = max(sort_contenders, key=lambda b: b['sort_score'])['sort_score']
+            best_contenders = [c for c in sort_contenders if c['sort_score'] >= highest_sort_score]
 
-        if len(best_contenders) == 1:
-            winner = best_contenders[0]
+            if len(best_contenders) == 1:
+                winner = best_contenders[0]
+
+                return TrackInfo(
+                    platform=Platform.SPOTIFY,
+                    raw_json=winner,
+                    name=winner['name'],
+                    artists=[a['name'] for a in winner['artists']],
+                    track_id=winner['id']
+                )
+        else:
+            # if no tracks passed the token sort threshold, try with the token set contenders
+            best_contenders = contenders
+
+        # No track_info to inspect; return the most popular
+        if not track_info:
+            winner = max(best_contenders, key=lambda sc: sc['popularity'])
+
+            return TrackInfo(
+                platform=Platform.SPOTIFY,
+                raw_json=winner,
+                name=winner['name'],
+                artists=[a['name'] for a in winner['artists']],
+                track_id=winner['id']
+            )
 
         """
         STAGE 3:
 
         Multiple contenders have passed the token_sort_score check. We have to get craftier.
-        If there is a track_info object and it's from Youtube, check the channelTitle and description
+        If there is a track_info object, check the channelTitle and description
         for mentions of the artist name
         """
-        if track_info and track_info.platform is Platform.YOUTUBE:
-            best_results_with_artist = []
-            best_score_so_far_with_artist = 0
-            original_description = track_info.description().lower()
-            for contender in best_contenders:
-                """
-                if we're here, it means comparing search_string to the artists
-                from the spotify response didn't help differentiate.
-                To decide:
-                1. see if we can find the artist(s) name(s) in the description of the video;
-                   add +10 to the search score for that
-                2. see if we can find the artist(s) name(s) in the channel title
-                   (e.g., Maroon 5 Official); add +25 for that
-                3. if there's still a tie, take the most popular one
-                """
-                current_score = 0
-                for a in contender['artists']:
-                    if a['name'].lower() in original_description:
-                        current_score += 10
+        best_results_with_artist = []
+        best_score_so_far_with_artist = 0
+        original_description = track_info.description().lower()
+        for contender in best_contenders:
+            """
+            if we're here, it means comparing search_string to the artists
+            from the spotify response didn't help differentiate.
+            To decide:
+            1. see if we can find the artist(s) name(s) in the description of the video;
+                add +10 to the search score for that
+            2. see if we can find the artist(s) name(s) in the channel title
+                (e.g., Maroon 5 Official); add +25 for that
+            3. if there's still a tie, take the most popular one
+            """
+            current_score = 0
+            for a in contender['artists']:
+                if a['name'].lower() in original_description:
+                    current_score += 10
 
-                    if a['name'].lower() in track_info.channel_title().lower():
-                        current_score += 25
+                if a['name'].lower() in track_info.channel_title().lower():
+                    current_score += 25
 
-                if current_score > 0 and current_score >= best_score_so_far_with_artist:
-                    contender['with_artist_score'] = current_score
-                    best_results_with_artist.append(contender)
+            if current_score > 0 and current_score >= best_score_so_far_with_artist:
+                contender['with_artist_score'] = current_score
+                best_results_with_artist.append(contender)
 
-            if best_results_with_artist:
-                highest_best_result_with_artist_score = max(
-                    best_results_with_artist,
-                    key=lambda b: b['with_artist_score'])['with_artist_score']
-                winner = max(
-                    [
-                        c for c in best_results_with_artist
-                        if c['with_artist_score'] >= highest_best_result_with_artist_score
-                    ],
-                    key=lambda bra: bra['popularity']
-                )
+        if best_results_with_artist:
+            highest_best_result_with_artist_score = max(
+                best_results_with_artist,
+                key=lambda b: b['with_artist_score'])['with_artist_score']
+            winner = max(
+                [
+                    c for c in best_results_with_artist
+                    if c['with_artist_score'] >= highest_best_result_with_artist_score
+                ],
+                key=lambda bra: bra['popularity']
+            )
         else:
-            # No track_info to inspect; return the most popular
-            winner = max(best_contenders, key=lambda b: b['popularity'])
+            # Nothing worked; just take the most popular
+            winner = max(best_contenders, key=lambda bc: bc['popularity'])
 
         # Awkward. I guess everything is fucked
         if not winner:

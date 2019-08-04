@@ -340,7 +340,7 @@ def add_track():
     add_manual_track_to_playlists.delay(
         track_name=track_name,
         artist=artist,
-        channel_id=channel_id
+        channel=channel_id
     )
 
     return '', 200
@@ -350,9 +350,9 @@ def add_track():
 @application.route("/slack_events/", methods=['POST'])
 @verified_slack_request
 def slack_events():
-    logger.info("Received event")
+    print("Received event")
     if not request.data:
-        logger.error("No request data sent to /slack_events")
+        print("No request data sent to /slack_events")
         return 400
 
     request_data_dict = json.loads(request.data.decode('utf-8'))
@@ -361,11 +361,11 @@ def slack_events():
 
     event = request_data_dict.get('event')
     if not event:
-        logger.error("Received event from slack with no event")
+        print("Received event from slack with no event")
         return "No event", 400
 
     if event.get('type') != 'link_shared':
-        logger.info("Received event that was not link_shared")
+        print("Received event that was not link_shared")
         return "Ok", 200
 
     channel = event.get('channel')
@@ -377,7 +377,7 @@ def slack_events():
     link = links[0].get('url')
 
     # CELERY
-    logger.info("Adding link %s to playilists" % link)
+    print("Adding link %s to playilists" % link)
     add_link_to_playlists.delay(
         link=link,
         channel=channel

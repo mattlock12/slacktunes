@@ -5,6 +5,7 @@ appnope==0.1.0
 astroid==2.2.5
 backcall==0.1.0
 billiard==3.6.0.0
+cachetools==3.1.1
 celery==4.3.0
 certifi==2017.4.17
 chardet==3.0.3
@@ -14,7 +15,9 @@ Flask==1.1.1
 Flask-Migrate==2.5.2
 Flask-SQLAlchemy==2.2
 fuzzywuzzy==0.16.0
-google-api-python-client==1.6.2
+google-api-python-client==1.7.10
+google-auth==1.6.3
+google-auth-httplib2==0.0.3
 gunicorn==19.9.0
 httplib2==0.10.3
 idna==2.5
@@ -38,8 +41,8 @@ pickleshare==0.7.4
 prompt-toolkit==1.0.15
 psycopg2==2.8.3
 ptyprocess==0.6.0
-pyasn1==0.2.3
-pyasn1-modules==0.0.8
+pyasn1==0.4.6
+pyasn1-modules==0.2.6
 Pygments==2.2.0
 pylint==2.3.1
 PyMySQL==0.7.11

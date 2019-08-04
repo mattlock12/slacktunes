@@ -67,6 +67,12 @@ class SlackMessageFormatter():
                 target_platform.name.title(),
                 origin_link
             )
+        elif isinstance(origin, dict):
+            attempt_message = "Unable to find %s match for %s - %s" % (
+                target_platform.name.title(),
+                origin.get('track_name'),
+                origin.get('artist')
+            )
         else:
             attempt_message = "Unable to find %s track for %s" % (
                 target_platform.name.title(),
@@ -99,7 +105,11 @@ class SlackMessageFormatter():
                 origin.platform.name.title(),
                 origin.track_open_url()
             )
-
+        elif isinstance(origin, dict):
+            attempt_message = "Attempted match for %s - %s" % (
+                origin.get('track_name'),
+                origin.get('artist')
+            )
         else:
             attempt_message = "Attempted match for:\n %s" % origin
 

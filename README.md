@@ -136,3 +136,13 @@ The easiest way to set up this Service User for local dev-ing is to:
 Give it a `docker-compose restart` and you should be good to go!
 
 Happy slacktuning!
+
+## NOTES:
+Slacktunes is set up to use the refresh token returned from the Youtube and Spotify APIs to refresh credentials indefinitely without the need for repeated user input.
+
+However, Youtube (at least) only sends the refresh token _the first time you request credentials_. Which means that if you update the client_secret or the api key you're using, and the old credentials (stored in the Slacktunes database) become unusable, it is _not enough_ to delete them from the database and re-auth -- because the Youtube API will recognize that this is the _second_ (or whatever) time you're authorizing access and it _will not_ return the refresh token.
+
+The only way to get the refresh token is to:
+1. Go to your Google account and de-authorized Slacktunes
+1. Delete the Credential object for Youtube from the Slacktunes database
+1. Go through the grant process

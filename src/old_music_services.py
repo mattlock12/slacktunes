@@ -72,7 +72,7 @@ class TrackInfo(object):
     def track_open_url(self):
         if self.link:
             return self.link
-        
+
         if self.platform is Platform.YOUTUBE:
             return "https://www.youtube.com/watch?v=%s" % self.track_id
         elif self.platform is Platform.SPOTIFY:
@@ -83,14 +83,14 @@ class TrackInfo(object):
     def track_image_url(self):
         if not self.raw_json:
             return None
-    
+
         if self.platform is Platform.YOUTUBE:
             return self.raw_json.get('thumbnails', {}).get('default')
         elif self.platform is Platform.SPOTIFY:
             images = self.raw_json.get('images')
             if not images:
                 return None
-            
+
             return min(images, key=lambda im: im['height']).get('url', None)
         else:
             return None
@@ -638,7 +638,7 @@ class Spotify(ServiceBase):
         # TODO: break this out into helper
         """
         STAGE 1: a token_set_ratio
-        
+
         Check if the given name and artist combo at least form a set of the results
         """
         for item in items:
@@ -664,7 +664,7 @@ class Spotify(ServiceBase):
 
         """
         STAGE 2: token_sort_ratio
-        
+
         If multiple contenders pass the token_set_ratio criteria, try a token_sort_ratio.
         How many transformations are necessary to change the source string to the target string?
         """
@@ -699,10 +699,10 @@ class Spotify(ServiceBase):
 
         """
         STAGE 3:
-        
+
         Multiple contenders have passed the token_sort_score check. And the source was a Youtube track
-            
-        We have to get craftier, 
+
+        We have to get craftier,
         A contender is a spotify api response, track_info is a youtube TrackInfo object
         Check the channelTitle and description for mentions of the artist name
         """

@@ -100,7 +100,7 @@ class TrackInfoTestCase(unittest.TestCase):
                 track_id='123',
                 artists=artists
             ).track_name_for_comparison(),
-            "This Love Maroon 5 Kabir"
+            "%s %s" % (track_name, " ".join(artists))
         )
 
     def test_track_name_for_display(self):
