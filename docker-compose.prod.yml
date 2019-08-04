@@ -12,3 +12,44 @@ services:
       - 443:443
     depends_on:
       - slacktunes
+
+ db:
+    image: postgres
+    restart: always
+    environment:
+      POSTGRES_PASSWORD: RESETME
+    tty: true
+    volumes:
+      - ./database-init-prod.sql:/docker-entrypoint-initdb.d/databases.sql
+      - "dbdata:/var/lib/postgresql/data"
+
+  redis:
+    container_name: redisbroker
+    image: redis
+    restart: always
+
+  celeryworker:
+    build: ./
+    restart: always
+    depends_on:
+      - redis
+    env_file:
+      - prod.env
+    command: celery -A src.tasks worker --loglevel=info
+
+  slacktunes:
+    build: ./
+    restart: always
+    container_name: slacktunes_backend
+    volumes:
+      - ./:/app
+    depends_on:
+      - db
+      - redis
+    env_file:
+      - prod.env
+    tty: true
+    command: /bin/bash -c './startup.sh && gunicorn -b 0.0.0.0:8080 application:application'
+
+volumes:
+  dbdata:
