@@ -14,7 +14,7 @@ services:
     depends_on:
       - slacktunes
 
- db:
+  db:
     image: postgres
     restart: always
     environment:

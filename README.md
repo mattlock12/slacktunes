@@ -146,3 +146,12 @@ The only way to get the refresh token is to:
 1. Go to your Google account and de-authorized Slacktunes
 1. Delete the Credential object for Youtube from the Slacktunes database
 1. Go through the grant process
+
+## Deployment Notes:
+Until a better process is implemented:
+1. ssh into the host
+1. Manually edit `database-init-prod.sql`, `docker-compose.prod.yml`, and `prod.env` manually to override:
+    - POSTGRES_PASSWORD
+    - slacktunes password
+    - keys and secrets in prod.env
+1. `docker-compose -f docker-compose.prod.yml up -d --build`

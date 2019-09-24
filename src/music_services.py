@@ -612,7 +612,7 @@ class SpotifyService(ServiceBase):
         if not results:
             return None
         if not results.get('tracks', {}).get('items'):
-            return None
+            return []
 
         return results['tracks']['items']
 

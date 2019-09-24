@@ -130,6 +130,8 @@ def spotifyoauth2callback():
 @application.route('/list_playlists/', methods=['POST'])
 @verified_slack_request
 def list_playlists():
+    if request.form.get('channel_name') == 'directmessage':
+        return "Can't list playlists in private channel", 200
     channel_id = request.form['channel_id']
 
     playlists = Playlist.query.filter_by(channel_id=channel_id).all()
@@ -244,6 +246,9 @@ def delete_playlist():
     channel_name = request.form['channel_name']
     slack_user_id = request.form['user_id']
     command_text_args = request.form['text'].split()
+
+    if channel_name == 'directmessage':
+        return "Can't delete playlist in private channel", 200
 
     if not command_text_args:
         return "Specify the name and platform of the playlist to delete", 200
@@ -369,6 +374,9 @@ def slack_events():
         return "Ok", 200
 
     channel = event.get('channel')
+    if channel.lower()[0] in ['d', 'g']:
+        # direct message, return
+        return "Ok", 200
 
     links = event.get('links')
     if not links:
