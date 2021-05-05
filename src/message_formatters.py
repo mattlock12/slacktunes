@@ -101,7 +101,7 @@ class SlackMessageFormatter():
         for a shared link or add_track string
         """
         if isinstance(origin, TrackInfo):
-            attempt_message = "Attempted match from %s link:\n %s" % (
+            attempt_message = "Attempted match from %s link:\n `%s`" % (
                 origin.platform.name.title(),
                 origin.track_open_url()
             )
